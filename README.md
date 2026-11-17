@@ -4,7 +4,7 @@
 
 ## Jugar
 
-Juega en [GitHub Pages](https://evilsysadmin.github.io/matthias-bridge-squad/) cuando el despliegue esté activo, o abre `index.html` en Firefox/Chromium. El juego no requiere Internet, instalación, servidor ni dependencias.
+La dirección de producción solicitada es **https://bridgesquad.shadowops.dpdns.org/**, pendiente de activación autenticada por ShadowOps Infra. El juego todavía puede ejecutarse sin conexión abriendo `index.html` en Firefox/Chromium; eso no equivale a acceder a la versión protegida.
 
 - **Ratón o dedo:** desliza horizontalmente para dirigir la escuadra.
 - **A/D o flechas:** mover a Matthias.
@@ -23,9 +23,9 @@ Juega en [GitHub Pages](https://evilsysadmin.github.io/matthias-bridge-squad/) c
 
 ## Desarrollo
 
-El juego es autónomo y está incluido en `index.html` (Canvas 2D + JS + CSS). El workflow `.github/workflows/pages.yml` ejecuta las pruebas de Chromium en cada PR y push; solo despliega a GitHub Pages tras superarlas en `main`.
+El juego es autónomo y está incluido en `index.html` (Canvas 2D + JS + CSS). El workflow `.github/workflows/pages.yml` **solo ejecuta pruebas Chromium**, sin publicación pública en GitHub Pages. La entrega autenticada en Cloudflare es responsabilidad exclusiva de `evilsysadmin/shadowops-infra`. Un despliegue anterior de GitHub Pages, de existir, requiere retirada explícita en Settings → Pages para eliminar el acceso alternativo.
 
-El progreso reside en `shadowops.mbs.progress.v1` y el ajuste de sonido en `shadowops.mbs.settings.v1`.
+En la URL protegida el progreso local reside en `shadowops.mbs.progress.v1:<UUIDv4 verificado por el edge>`, separado por cuenta en el navegador; en modo offline conserva `shadowops.mbs.progress.v1`. El sonido sigue en `shadowops.mbs.settings.v1`. **No hay todavía sincronización cloud** entre dispositivos ni importación automática del progreso offline a una cuenta.
 
 El juego no copia el código, imágenes ni otros activos del original. El alcance es una primera versión jugable, pendiente de playtesting, iteraciones de balance y posible integración con el ecosistema ShadowOps.
 ### Ejecutar el smoke test local
