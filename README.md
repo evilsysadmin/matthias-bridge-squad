@@ -37,3 +37,7 @@ python smoke_test.py
 ```
 
 Comprueba menús, controles, pausa, pronóstico de puertas, victoria/estrellas y una ruta ganadora por nivel en móvil y escritorio.
+
+## Candidato de release protegido
+
+Tras superar el smoke de Chromium de `main`, CI genera **solo un artefacto privado de GitHub Actions** llamado `bridgesquad-private-release-<SHA>` (retención 30 días) con `index.html` byte-a-byte y `release.json` que ancla repositorio, commit, SHA-256, tamaño y audiencia de Identity. Se comprueba la política de empaquetado en CI sin secretos. **No despliega a GitHub Pages ni a Cloudflare**, no verifica Identity y no constituye una URL jugable. ShadowOps Infra debe admitir exactamente ese SHA/digest en un futuro despliegue autenticado.

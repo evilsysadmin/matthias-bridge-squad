@@ -30,3 +30,26 @@ jobs:
       - name: Verify desktop, mobile and 12 levels
         run: python smoke_test.py
 
+  package-private-candidate:
+    if: >-
+      github.repository == 'evilsysadmin/matthias-bridge-squad' &&
+      github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: smoke
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify source-pinned release package policy (offline)
+        run: python3 -m unittest discover -s tests -p test_build_release.py -v
+      - name: Build immutable private candidate for Infra admission
+        run: python3 scripts/build_release.py
+      - name: Upload exact SHA-bound candidate; never deploy publicly
+        uses: actions/upload-artifact@v4
+        with:
+          name: bridgesquad-private-release-${{ github.sha }}
+          path: _site/
+          retention-days: 30
+          if-no-files-found: error
