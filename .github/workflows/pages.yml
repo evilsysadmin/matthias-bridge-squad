@@ -1,4 +1,4 @@
-name: Smoke test and Pages
+name: Bridge Squad · browser tests (public Pages delivery disabled)
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: pages-${{ github.ref }}
+  group: bridgesquad-smoke-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -30,33 +30,3 @@ jobs:
       - name: Verify desktop, mobile and 12 levels
         run: python smoke_test.py
 
-  deploy:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    needs: smoke
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Configure and initialize GitHub Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-      - name: Stage only the public game
-        run: |
-          mkdir -p _site
-          cp index.html _site/index.html
-          touch _site/.nojekyll
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: _site
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4

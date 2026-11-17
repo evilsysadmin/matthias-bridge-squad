@@ -59,9 +59,15 @@
   const rand=(seed)=>{let s=seed>>>0;return()=>{s=(Math.imul(1664525,s)+1013904223)>>>0;return s/4294967296}};
   const safeRead=(key,fallback)=>{try{const data=JSON.parse(localStorage.getItem(key));return data??fallback}catch{return fallback}};
   const save=(key,value)=>{try{localStorage.setItem(key,JSON.stringify(value))}catch{}};
-  const PROGRESS_KEY='shadowops.mbs.progress.v1', SETTINGS_KEY='shadowops.mbs.settings.v1';
-  const rawProgress=safeRead(PROGRESS_KEY,{});
-  let progress={unlocked:clamp(Number(rawProgress.unlocked)||1,1,12),stars:Array.from({length:12},(_,i)=>clamp(Number(rawProgress.stars?.[i])||0,0,3)),best:Array.from({length:12},(_,i)=>Math.max(0,Number(rawProgress.best?.[i])||0)),wins:Math.max(0,Number(rawProgress.wins)||0)};
+  let PROGRESS_KEY='shadowops.mbs.progress.v1';
+  const SETTINGS_KEY='shadowops.mbs.settings.v1';
+  // Browser-local campaign records are namespaced by the UUID verified by the edge.
+  // An unverified user name, query string or JWT payload can never select a save.
+  const loadProgress=()=>{
+    const rawProgress=safeRead(PROGRESS_KEY,{});
+    return {unlocked:clamp(Number(rawProgress.unlocked)||1,1,12),stars:Array.from({length:12},(_,i)=>clamp(Number(rawProgress.stars?.[i])||0,0,3)),best:Array.from({length:12},(_,i)=>Math.max(0,Number(rawProgress.best?.[i])||0)),wins:Math.max(0,Number(rawProgress.wins)||0)};
+  };
+  let progress=loadProgress();
   let settings=safeRead(SETTINGS_KEY,{muted:false});settings.muted=!!settings.muted;
   const stageNames=['El primer puente','Reclutas bajo fuego','Operación Multiplica','El cañón del cobre','Salvar al héroe','La doble emboscada','Sector Escarlata','El puente estrecho','Carga de los veteranos','Lluvia de metralla','Fortaleza de hierro','El juicio de Matthias'];
   const bossNames=['SARGENTO CHATARRA','CAPITÁN GRUÑÓN','MAYOR OXIDADO','BARÓN DE ACERO','GENERAL PLANCHADOR','DUQUE DEL CAÑÓN','LA APISONADORA','COLOSO DEL PUENTE','MARISCAL RUIDOSO','EL DEMOLEDOR','TITÁN DE ACERO','EL GRAN CABRONAZO'];
@@ -230,7 +236,28 @@
   function drawWorld(dt){if(!game)return;ctx.save();if(screenShake>.1){ctx.translate((Math.random()-.5)*screenShake,(Math.random()-.5)*screenShake);screenShake*=.89;}drawBackground();drawBridge();const objs=[...game.groups,...game.objects,{type:'boss',z:game.length}].sort((a,b)=>b.z-a.z);for(const o of objs){if(o.type==='gate')drawGate(o);else if(o.type==='hazard')drawHazard(o);else if(o.type==='crate')drawCrate(o);else if(o.type==='enemy')drawEnemy(o);else if(o.type==='cage')drawCage(o);else if(o.type==='boss')drawBoss()}
     drawSquad();drawFloatingAndFx(dt);ctx.restore();}
   function frame(ms){requestAnimationFrame(frame);const dt=Math.min((ms-last)/1000||0,.05);last=ms;t+=dt;update(dt);drawWorld(dt);} 
-  mainMenu();requestAnimationFrame(frame);
+  // The public source can still run offline, but the canonical production host
+  // requires a real edge-verified ShadowOps ID session before rendering the menu.
+  // This check does not replace server-side enforcement in Cloudflare's Worker.
+  if(location.hostname==='bridgesquad.shadowops.dpdns.org'){
+    state='auth-check';
+    fetch('/api/bridgesquad/session',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(8000)})
+      .then(async response=>{
+        if(!response.ok)throw Error('session_denied');
+        const session=await response.json();
+        if(!session||session.identity!=='bridgesquad'||!/^([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/.test(session.subject))
+          throw Error('invalid_identity');
+        PROGRESS_KEY='shadowops.mbs.progress.v1:'+session.subject;
+        progress=loadProgress();
+        mainMenu();
+        requestAnimationFrame(frame);
+      }).catch(()=>{
+        state='auth-blocked';
+        showScreen('<p class="eyebrow">SHADOWOPS ID</p><h2>Acceso no disponible</h2><p>No se pudo verificar tu sesión. El juego no cargará sin una identidad válida.</p><a class="secondary" href="/">Reintentar</a>');
+      });
+  }else{
+    mainMenu();requestAnimationFrame(frame);
+  }
   // Small read-only test surface for deterministic browser smoke tests.
   Object.defineProperty(window,'__MBS_TEST__',{value:Object.freeze({getState:()=>state,getSnapshot:()=>game&&({level:game.n,world:game.world,x:game.x,troops:game.troops,attack:game.attack,bossHp:game.bossHp,hero:game.hero,score:game.score}),getProgress:()=>({...progress}),gateOutcome,levelData:n=>levelData(clamp(n,1,12))})});
 })();

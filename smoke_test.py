@@ -72,4 +72,36 @@ with sync_playwright() as p:
             outcomes.append(page.evaluate('__MBS_TEST__.getState()'))
         assert 'won' in outcomes, (level,outcomes)
     print('OK all 12 levels have at least one winning route on a fixed lane')
+    # Simulate the production edge JSON endpoint on the exact host. These are
+    # browser-isolation tests, NOT proof of a live ShadowOps ID deployment.
+    from json import dumps
+    protected='https://bridgesquad.shadowops.dpdns.org'
+    subject_a='123e4567-e89b-42d3-a456-426614174000'
+    subject_b='123e4567-e89b-42d3-a456-426614174001'
+    current={'sub':subject_a,'active':True}
+    profile=browser.new_page()
+    profile.route(protected+'/', lambda route: route.fulfill(status=200,body=HTML,content_type='text/html'))
+    def identity_route(route):
+        if not current['active']:
+            route.fulfill(status=401,body='{"error":"authentication_required"}',content_type='application/json')
+        else:
+            route.fulfill(status=200,body=dumps({'identity':'bridgesquad','subject':current['sub']}),content_type='application/json')
+    profile.route(protected+'/api/bridgesquad/session', identity_route)
+    profile.goto(protected+'/')
+    profile.wait_for_function("window.__MBS_TEST__ && __MBS_TEST__.getState()==='menu'")
+    profile.evaluate("(s) => localStorage.setItem('shadowops.mbs.progress.v1:'+s,JSON.stringify({unlocked:9,stars:[3],wins:8}))",subject_a)
+    profile.reload()
+    profile.wait_for_function("window.__MBS_TEST__ && __MBS_TEST__.getProgress().unlocked===9")
+    current['sub']=subject_b
+    profile.reload()
+    profile.wait_for_function("window.__MBS_TEST__ && __MBS_TEST__.getState()==='menu'")
+    assert profile.evaluate('__MBS_TEST__.getProgress().unlocked') == 1, 'another account must not inherit progress'
+    current['sub']=subject_a
+    profile.reload()
+    profile.wait_for_function("window.__MBS_TEST__ && __MBS_TEST__.getProgress().unlocked===9")
+    current['active']=False
+    profile.reload()
+    profile.wait_for_function("window.__MBS_TEST__ && __MBS_TEST__.getState()==='auth-blocked'")
+    print('OK production-host identity bootstrap, account-separated saves and denied-session lock')
+    profile.close()
     browser.close()
