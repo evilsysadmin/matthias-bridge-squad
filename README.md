@@ -4,13 +4,13 @@
 
 ## Jugar
 
-Abre `index.html` en Firefox/Chromium. No requiere Internet, instalación, servidor ni dependencias.
+Juega en [GitHub Pages](https://evilsysadmin.github.io/matthias-bridge-squad/) cuando el despliegue esté activo, o abre `index.html` en Firefox/Chromium. El juego no requiere Internet, instalación, servidor ni dependencias.
 
 - **Ratón o dedo:** desliza horizontalmente para dirigir la escuadra.
 - **A/D o flechas:** mover a Matthias.
 - **P o Escape:** pausa; **R:** reinicio; **M:** sonido.
 - El escuadrón dispara automáticamente cuando está alineado con los enemigos o el prisionero.
-- Cruza puertas verdes para sumar/multiplicar tropas, evita trampas, recoge cajas ATK y dispara a la jaula para rescatar al héroe.
+- Cruza puertas verdes para sumar/multiplicar tropas: la puerta más próxima muestra una **previsión de tropas** (se recalcula si tu escuadrón cambia). Evita trampas, recoge cajas ATK y dispara a la jaula para rescatar al héroe.
 - En la batalla final, esquiva el área marcada en rojo mientras disparas al jefe.
 
 ## Contenido
@@ -23,8 +23,17 @@ Abre `index.html` en Firefox/Chromium. No requiere Internet, instalación, servi
 
 ## Desarrollo
 
-El juego es autónomo y está incluido en `index.html` (Canvas 2D + JS + CSS). Pensado para servir desde cualquier hosting estático, incluido GitHub Pages y Cloudflare Pages.
+El juego es autónomo y está incluido en `index.html` (Canvas 2D + JS + CSS). El workflow `.github/workflows/pages.yml` ejecuta las pruebas de Chromium en cada PR y push; solo despliega a GitHub Pages tras superarlas en `main`.
 
 El progreso reside en `shadowops.mbs.progress.v1` y el ajuste de sonido en `shadowops.mbs.settings.v1`.
 
 El juego no copia el código, imágenes ni otros activos del original. El alcance es una primera versión jugable, pendiente de playtesting, iteraciones de balance y posible integración con el ecosistema ShadowOps.
+### Ejecutar el smoke test local
+
+```sh
+python -m pip install playwright
+python -m playwright install chromium
+python smoke_test.py
+```
+
+Comprueba menús, controles, pausa, pronóstico de puertas, victoria/estrellas y una ruta ganadora por nivel en móvil y escritorio.
