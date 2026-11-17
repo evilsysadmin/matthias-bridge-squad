@@ -37,6 +37,18 @@ with sync_playwright() as p:
         assert page.locator('button.level:not([disabled])').count() == 1
         page.locator('[data-action="play"]').click()
         assert page.evaluate('__MBS_TEST__.getState()') == 'playing'
+        # Pointer coordinates must map to the leader's projected position,
+        # on both narrow phones and wide desktop viewports.
+        projected_scale = min(width * .115, height * .145) / (1 + 5.5 * .042)
+        page.mouse.move(width / 2 + projected_scale * 1.65, height * .75)
+        page.evaluate('__testStep__(1)')
+        assert abs(page.evaluate('__MBS_TEST__.getSnapshot().x') - 1.65) < .03
+        # The mathematical forecast must use the exact gameplay operation.
+        assert page.evaluate('__MBS_TEST__.gateOutcome(7, {op:"+", n:11})') == 18
+        assert page.evaluate('__MBS_TEST__.gateOutcome(7, {op:"×", n:2})') == 14
+        assert page.evaluate('__MBS_TEST__.gateOutcome(110, {op:"×", n:3})') == 120
+        assert page.evaluate('__MBS_TEST__.gateOutcome(9, {op:"÷", n:2})') == 4
+        assert page.evaluate('__MBS_TEST__.gateOutcome(9, {op:"−", n:99})') == 1
         page.keyboard.press('p')
         assert page.evaluate('__MBS_TEST__.getState()') == 'paused'
         page.locator('[data-action="resume"]').click()

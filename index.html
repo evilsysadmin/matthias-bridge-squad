@@ -68,6 +68,15 @@
   const stageThemes=[['#2a6a78','#e3ad78','#446c68'],['#306577','#d3b08a','#4b7670'],['#48678d','#e4a6a4','#556d89'],['#785d6d','#f4c47e','#6f6574'],['#39627a','#e7c18a','#456b7b'],['#315772','#d18e83','#4a5d80'],['#654e70','#efa38d','#5d5b7d'],['#446578','#f3cc9e','#3b6c6f'],['#575b70','#f5bd83','#657a74'],['#6b526c','#e7a6a5','#53677f'],['#33566a','#d9b58d','#496a81'],['#443f64','#f2ac7f','#665476']];
   let W=1200,H=760,DPR=1,game=null,state='menu',selectedStage=1,t=0,last=0,keys=new Set(),isPointer=false,targetX=0,fx=[],floats=[],screenShake=0,audioCtx=null,toastUntil=0,toastMessage='';
   const MAX_TROOPS=120;
+  // One calculation for actual gate crossings and the on-screen forecast.
+  function gateOutcome(troops,gate){
+    if(gate.op==='×')return Math.min(MAX_TROOPS,troops*gate.n);
+    if(gate.op==='+')return Math.min(MAX_TROOPS,troops+gate.n);
+    if(gate.op==='−')return Math.max(1,troops-gate.n);
+    if(gate.op==='÷')return Math.max(1,Math.floor(troops/gate.n));
+    return troops;
+  }
+
   function levelData(n){
     const r=rand(60017+n*997),length=200+(n-1)*6,groups=[],objects=[];
     const count=n<3?3:n<6?4:5;
@@ -100,7 +109,7 @@
   function pauseMenu(){state='paused';showScreen(`<p class="eyebrow">ALTO EL FUEGO</p><h2>Operación en pausa</h2><p>Matthias te concede cinco segundos de descanso. No te acostumbres.</p>${btn('resume','REANUDAR OPERACIÓN →')}${btn('retry','Reiniciar nivel','secondary')}${btn('menu','Abandonar al cuartel','secondary')}`);}
   function endMenu(won){state=won?'won':'lost';const n=game.n;let stars=0,points=game.score+game.troops*12+Math.round((game.attack-1)*300)+game.kills*30;
     if(won){stars=1+Number(game.hero)+Number(game.troops>=Math.min(40,16+n*2));const better=Math.max(stars,progress.stars[n-1]);progress.stars[n-1]=better;progress.best[n-1]=Math.max(points,progress.best[n-1]);progress.wins++;progress.unlocked=Math.max(progress.unlocked,Math.min(12,n+1));save(PROGRESS_KEY,progress);}
-    showScreen(`<p class="eyebrow">${won?'MISIÓN CUMPLIDA · VICTORIA':'MISIÓN FALLIDA · REAGRUPAMIENTO'}</p><h2>${won?'El puente es nuestro.':'Hasta el último peón.'}</h2><div class="stars">${won?'★'.repeat(stars)+'☆'.repeat(3-stars):'☆☆☆'}</div><p>${won?'Matthias aprueba tu actuación. A regañadientes, naturalmente.':'Matthias exige nuevos reclutas. El enemigo ha hecho salchichas con tu escuadrón.'}</p><div class="rows"><div class="metric"><b>${game.troops}</b><span>Supervivientes</span></div><div class="metric"><b>${game.attack.toFixed(2)}×</b><span>Ataque</span></div><div class="metric"><b>${won?points.toLocaleString('es-ES'):'—'}</b><span>Puntos</span></div></div><p class="tiny" style="text-align:center">${game.hero?'✓ Héroe liberado':'✗ Héroe no liberado'} · ${game.gates} puertas · ${game.kills} enemigos neutralizados</p>${won&&n<12?btn('next',`SIGUIENTE NIVEL ${String(n+1).padStart(2,'0')} →`):btn('retry',won?'REPETIR NIVEL →':'REINTENTAR →')}${won&&n<12?btn('retry','Rejugar este nivel','secondary'):''}${btn('levels','Elegir nivel','secondary')}`);
+    showScreen(`<p class="eyebrow">${won?'MISIÓN CUMPLIDA · VICTORIA':'MISIÓN FALLIDA · REAGRUPAMIENTO'}</p><h2>${won?'El puente es nuestro.':'Hasta el último peón.'}</h2><div class="stars">${won?'★'.repeat(stars)+'☆'.repeat(3-stars):'☆☆☆'}</div><p>${won?(stars===3?'Matthias: Héroe rescatado, tropas en pie y puente tomado. Casi pareces competente.':game.hero?'Matthias: Has salvado al héroe. Ahora aprende a conservar a los demás.':'Matthias: El jefe cayó, pero abandonaste al prisionero. Qué gran generosidad.'): 'Matthias exige nuevos reclutas. El enemigo ha hecho salchichas con tu escuadrón.'}</p><div class="rows"><div class="metric"><b>${game.troops}</b><span>Supervivientes</span></div><div class="metric"><b>${game.attack.toFixed(2)}×</b><span>Ataque</span></div><div class="metric"><b>${won?points.toLocaleString('es-ES'):'—'}</b><span>Puntos</span></div></div><p class="tiny" style="text-align:center">${game.hero?'✓ Héroe liberado':'✗ Héroe no liberado'} · ${game.gates} puertas · ${game.kills} enemigos neutralizados</p>${won&&n<12?btn('next',`SIGUIENTE NIVEL ${String(n+1).padStart(2,'0')} →`):btn('retry',won?'REPETIR NIVEL →':'REINTENTAR →')}${won&&n<12?btn('retry','Rejugar este nivel','secondary'):''}${btn('levels','Elegir nivel','secondary')}`);
   }
   ui.modal.addEventListener('click',e=>{const b=e.target.closest('button[data-action]');if(!b||b.disabled)return;const action=b.dataset.action; audio('tap');if(action==='menu')mainMenu();else if(action==='levels')levelsMenu();else if(action==='pick'){selectedStage=Number(b.dataset.level);levelsMenu();}else if(action==='play'||action==='retry'){start(selectedStage)}else if(action==='next'){selectedStage=Math.min(12,game.n+1);start(selectedStage)}else if(action==='resume'){state=game.bossPhase?'boss':'playing';hideScreen()}else if(action==='reset'){if(confirm('¿Borrar estrellas y niveles desbloqueados de este navegador?')){progress={unlocked:1,stars:Array(12).fill(0),best:Array(12).fill(0),wins:0};selectedStage=1;save(PROGRESS_KEY,progress);levelsMenu();}}});
   function start(n){selectedStage=n;game=makeGame(n);fx=[];floats=[];targetX=game.x;keys.clear();state='playing';hideScreen();ui.stage.textContent=String(n).padStart(2,'0');say(`<b>Matthias:</b> ${['¡En formación, zopencos!','Que nadie se quede atrás.','Mis peones valen más que vuestra dignidad.','El puente es mío. Solo falta tomarlo.'][n%4]}`,4);audio('start');canvas.focus({preventScroll:true});}
@@ -109,7 +118,15 @@
   function audio(what){if(settings.muted)return;try{audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==='suspended')audioCtx.resume();const now=audioCtx.currentTime,o=audioCtx.createOscillator(),g=audioCtx.createGain(),v={tap:[380,.045,.026],start:[490,.18,.07],gate:[680,.16,.055],hurt:[110,.24,.08],boost:[960,.21,.07],hit:[165,.07,.024],win:[740,.48,.08],lose:[125,.5,.09]}[what]||[370,.1,.03];o.type=(what==='hurt'||what==='lose')?'sawtooth':'sine';o.frequency.setValueAtTime(v[0],now);o.frequency.exponentialRampToValueAtTime(what==='lose'?60:Math.max(70,v[0]*.65),now+v[1]);g.gain.setValueAtTime(.0001,now);g.gain.exponentialRampToValueAtTime(v[2],now+.012);g.gain.exponentialRampToValueAtTime(.0001,now+v[1]);o.connect(g);g.connect(audioCtx.destination);o.start(now);o.stop(now+v[1]+.015);}catch{}}
   ui.mute.addEventListener('click',()=>{settings.muted=!settings.muted;save(SETTINGS_KEY,settings);hudUpdate();if(!settings.muted)audio('tap');});
   ui.pause.addEventListener('click',()=>{if(state==='playing'||state==='boss')pauseMenu()});
-  function inputPointer(e){if(!(state==='playing'||state==='boss'))return;const rect=canvas.getBoundingClientRect();targetX=clamp(((e.clientX-rect.left)/rect.width-.5)*9,-3.23,3.23);}
+  function inputPointer(e){
+    if(!(state==='playing'||state==='boss'))return;
+    // Steer to the actual projected commander position, not an arbitrary
+    // fraction of the entire viewport (which changes feel across screens).
+    const rect=canvas.getBoundingClientRect();
+    const scale=Math.min(W*.115,H*.145)/(1+5.5*.042);
+    const screenX=(e.clientX-rect.left)*W/rect.width;
+    targetX=clamp((screenX-W*.5)/scale,-3.23,3.23);
+  }
   canvas.addEventListener('pointermove',e=>{if(e.pointerType==='mouse'||isPointer)inputPointer(e)});
   canvas.addEventListener('pointerdown',e=>{isPointer=true;canvas.setPointerCapture?.(e.pointerId);inputPointer(e);});
   canvas.addEventListener('pointerup',()=>isPointer=false);canvas.addEventListener('pointercancel',()=>isPointer=false);
@@ -117,18 +134,26 @@
   addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));addEventListener('blur',()=>{keys.clear();if(state==='playing'||state==='boss')pauseMenu()});
   function burst(x,z,color,count=13){for(let i=0;i<count;i++){const a=Math.random()*Math.PI*2,v=20+Math.random()*100;fx.push({x,z,vx:Math.cos(a)*v,vy:-Math.random()*v-25,life:.45+Math.random()*.48,max:.9,color,size:2+Math.random()*5});}if(fx.length>180)fx.splice(0,fx.length-180);}
   function floatText(x,z,msg,color='#e9ffc4'){floats.push({x,z,txt:String(msg),color,life:1.35});if(floats.length>28)floats.shift();}
-  function casualty(n,why){const lost=Math.min(game.troops,Math.max(0,Math.ceil(n)));if(!lost)return;game.troops-=lost;screenShake=Math.min(11,screenShake+lost*.26);floatText(game.x,game.world+4,`−${lost}`, '#ff9d9e');audio('hurt');if(why)say(`<b>Matthias:</b> ${why}`,2.5);if(game.troops<=0){game.troops=0;endMenu(false);audio('lose');}}
-  function applyGate(op){if(op.op==='×')game.troops=Math.min(MAX_TROOPS,game.troops*op.n);else if(op.op==='+')game.troops=Math.min(MAX_TROOPS,game.troops+op.n);else if(op.op==='−')game.troops=Math.max(1,game.troops-op.n);else if(op.op==='÷')game.troops=Math.max(1,Math.floor(game.troops/op.n));game.peak=Math.max(game.peak,game.troops)}
+  function casualty(n,why){const before=game.troops,lost=Math.min(before,Math.max(0,Math.ceil(n)));if(!lost)return;
+    game.troops-=lost;screenShake=Math.min(11,screenShake+lost*.26);floatText(game.x,game.world+4,`−${lost}`, '#ff9d9e');audio('hurt');
+    if(game.troops<=0){game.troops=0;endMenu(false);audio('lose');return;}
+    // Matthias saves his insults for serious tactical errors, not every scratch.
+    if(why&&(lost>=6||lost>=before*.4)&&t>toastUntil)say(`<b>Matthias:</b> ${why}`,2.5);
+  }
+  function applyGate(op){game.troops=gateOutcome(game.troops,op);game.peak=Math.max(game.peak,game.troops)}
   function update(dt){if(!game||!(state==='playing'||state==='boss'))return;game.elapsed+=dt;let movement=0;if(keys.has('a')||keys.has('arrowleft'))movement-=1;if(keys.has('d')||keys.has('arrowright'))movement+=1;if(movement){targetX=clamp(targetX+movement*7.8*dt,-3.23,3.23);}game.x=lerp(game.x,targetX,1-Math.exp(-11*dt));
     if(state==='playing'){const was=game.world;game.world=Math.min(game.world+game.speed*dt,game.length-14);
-      for(const gate of game.groups){if(!gate.used&&game.world>=gate.z){gate.used=true;const side=game.x<0?'left':'right',chosen=gate[side];const before=game.troops;applyGate(chosen);game.gates++;game.gateChosen.push(side);game.score+=Math.max(0,game.troops-before)*13;floatText(game.x,gate.z,`${chosen.op}${chosen.n}  → ${game.troops}`,chosen.op==='−'||chosen.op==='÷'?'#ff9d9e':'#dffc92');burst(game.x,gate.z,chosen.op==='−'||chosen.op==='÷'?'#ff888e':'#bdfd9e',19);audio('gate');if(chosen.op==='−'||chosen.op==='÷')say('<b>Matthias:</b> ¡Esa puerta era una trampa, pedazo de alcornoque!',2.7);else if(game.gates===1)say('<b>Matthias:</b> Más soldados. Más problemas para el enemigo.',2.6);}}
+      for(const gate of game.groups){if(!gate.used&&game.world>=gate.z){gate.used=true;const side=game.x<0?'left':'right',chosen=gate[side];const before=game.troops;applyGate(chosen);game.gates++;game.gateChosen.push(side);game.score+=Math.max(0,game.troops-before)*13;const missed=gateOutcome(before,gate[side==='left'?'right':'left'])-game.troops;floatText(game.x,gate.z,`${chosen.op}${chosen.n}  → ${game.troops}`,chosen.op==='−'||chosen.op==='÷'?'#ff9d9e':'#dffc92');burst(game.x,gate.z,chosen.op==='−'||chosen.op==='÷'?'#ff888e':'#bdfd9e',19);audio('gate');if(chosen.op==='−'||chosen.op==='÷')say('<b>Matthias:</b> ¡Esa puerta era una trampa, pedazo de alcornoque!',2.7);
+        else if(missed>=10)say(`<b>Matthias:</b> Has dejado ${missed} soldados en la otra puerta. ¿Trabajas para el enemigo?`,3.5);
+        else if(missed<=-12&&game.gates>1&&t>toastUntil)say('<b>Matthias:</b> Buena elección. Hasta un recluta tiene sus momentos.',3);
+        else if(game.gates===1&&t>toastUntil)say('<b>Matthias:</b> Más soldados. Más problemas para el enemigo.',2.6);}}
       for(const o of game.objects){if(o.used)continue;const dz=o.z-game.world;
-        if(o.type==='hazard'&&dz<=.85){o.used=true;if(Math.abs(o.x-game.x)<1.12){casualty(o.strength,'¡Una trampa! Mirad por dónde pisáis.');burst(o.x,o.z,'#fd9889',15)}else{game.score+=30}}
-        else if(o.type==='crate'&&dz<=.8){o.used=true;if(Math.abs(o.x-game.x)<1.23){game.attack=+(game.attack+o.bonus).toFixed(2);floatText(o.x,o.z,'ATK +'+o.bonus.toFixed(2),'#ffda83');burst(o.x,o.z,'#ffd080',23);say('<b>Matthias:</b> Armamento nuevo. Ahora sí que empieza la fiesta.',3);audio('boost')}else{floatText(o.x,o.z,'PERDIDO','#b5ced3')}}
+        if(o.type==='hazard'&&dz<=.85){o.used=true;if(Math.abs(o.x-game.x)<1.12){casualty(o.strength,'¡Una trampa! Mirad por dónde pisáis.');burst(o.x,o.z,'#fd9889',15);if(state==='lost')return;}else{game.score+=30}}
+        else if(o.type==='crate'&&dz<=.8){o.used=true;if(Math.abs(o.x-game.x)<1.23){game.attack=+(game.attack+o.bonus).toFixed(2);floatText(o.x,o.z,'ATK +'+o.bonus.toFixed(2),'#ffda83');burst(o.x,o.z,'#ffd080',23);if(t>toastUntil)say('<b>Matthias:</b> Armamento nuevo. Ahora sí que empieza la fiesta.',3);audio('boost')}else{floatText(o.x,o.z,'PERDIDO','#b5ced3')}}
         else if(o.type==='enemy'){
           if(o.hp>0&&dz<21&&dz>1&&Math.abs(o.x-game.x)<1.95){o.hp-=dt*game.troops*game.attack*.8;game.shots+=dt*12;if(Math.random()<dt*13)burst(o.x,o.z,'#ffcb92',3);}
           if(o.hp<=0){o.used=true;game.kills++;game.score+=150;floatText(o.x,o.z,'ENEMIGO CAÍDO','#d7fc97');burst(o.x,o.z,'#ffb78b',14);}
-          else if(dz<.9){o.used=true;if(Math.abs(o.x-game.x)<1.55)casualty(Math.ceil(o.strength*(o.hp/o.maxHp)),'¡Nos han pillado sin cobertura!');}
+          else if(dz<.9){o.used=true;if(Math.abs(o.x-game.x)<1.55){casualty(Math.ceil(o.strength*(o.hp/o.maxHp)),'¡Nos han pillado sin cobertura!');if(state==='lost')return;}}
         }else if(o.type==='cage'){
           if(dz<27&&dz>1&&Math.abs(o.x-game.x)<1.9){o.hp-=dt*game.troops*game.attack*.95;game.shots+=dt*10;if(Math.random()<dt*10)burst(o.x,o.z,'#e7fdbc',2)}
           if(o.hp<=0&&!o.liberated){o.used=true;o.liberated=true;game.hero=true;game.troops=Math.min(MAX_TROOPS,game.troops+o.reinforcements);game.attack=+(game.attack+.25).toFixed(2);game.peak=Math.max(game.peak,game.troops);game.score+=500;floatText(o.x,o.z,'¡HÉROE LIBRE! +'+o.reinforcements,'#eafa8a');burst(o.x,o.z,'#d5ff8e',27);say('<b>Matthias:</b> ¡Un héroe rescatado! Seguro que este sí sabe obedecer.',3.4);audio('boost');}
@@ -143,7 +168,7 @@
       if(game.bossHp<=0){game.bossHp=0;game.score+=1500+game.n*180;endMenu(true);audio('win');burst(0,game.length,'#ffdd86',70);return}
       game.bossClock+=dt;
       if(game.bossPhase===1&&game.bossClock>=game.bossFire-1.0){game.bossPhase=2;game.bossAim=game.x;game.bossClock=0;}
-      else if(game.bossPhase===2&&game.bossClock>=1.0){game.bossPhase=3;game.bossClock=0;game.bossBlast=.5;if(Math.abs(game.x-game.bossAim)<1.25){casualty(3+Math.ceil(game.n*.55),'¡Esquivando bombas con los pies, incompetentes!');}else{game.score+=75;floatText(game.x,game.world+5,'ESQUIVADO','#b5ffb7');}burst(game.bossAim,game.world+5,'#ff9c76',18)}
+      else if(game.bossPhase===2&&game.bossClock>=1.0){game.bossPhase=3;game.bossClock=0;game.bossBlast=.5;if(Math.abs(game.x-game.bossAim)<1.25){casualty(3+Math.ceil(game.n*.55),'¡Esquivando bombas con los pies, incompetentes!');if(state==='lost')return;}else{game.score+=75;floatText(game.x,game.world+5,'ESQUIVADO','#b5ffb7');if(game.n>=3&&t>toastUntil)say('<b>Matthias:</b> ¡Bien esquivado! Quizá merezcas conservar tus extremidades.',3);}burst(game.bossAim,game.world+5,'#ff9c76',18)}
       else if(game.bossPhase===3&&game.bossClock>=.47){game.bossPhase=1;game.bossClock=0;}
     }
     game.peak=Math.max(game.peak,game.troops);hudUpdate();
@@ -168,8 +193,20 @@
     }
     for(const side of [-1,1]){for(let z=game.world+145;z>game.world-5;z-=11){let a=projected(side*4.48,z),b=projected(side*4.48,z,1.5),c=projected(side*4.48,z-11,1.5);line(a.x,a.y,b.x,b.y,'#547c76',Math.max(1,7*a.p));line(b.x,b.y,c.x,c.y,'#6c9690',Math.max(1,4*a.p));let cap=projected(side*4.48,z,1.5);ctx.beginPath();ctx.arc(cap.x,cap.y,Math.max(1,3*a.p),0,7);ctx.fillStyle='#e4c287';ctx.fill();}}
   }
-  function drawGate(g){const dz=g.z-game.world;if(dz<-.6||dz>125)return;for(const side of [-1,1]){const op=side<0?g.left:g.right,x=side*1.72,c=projected(x,g.z),width=Math.min(W*.2,H*.26)*c.p*2.05,height=160*c.p*(H/760)**.28,good=op.op==='+'||op.op==='×',color=good?'#84f7be':'#ff8589',strong=good?'#e6ffd9':'#ffe5e0';if(c.p<.1)continue;
-      const x0=c.x-width/2,y0=c.y-height,post=Math.max(2,8*c.p);ctx.globalAlpha=g.used?.15:.9;roundRect(x0,y0,width,height,6*c.p,good?'#4ac89936':'#ea68643d');line(x0,y0,x0+width,y0,color,post);line(x0,y0,x0,c.y,color,post);line(x0+width,y0,x0+width,c.y,color,post);ctx.fillStyle=good?'#dcffae66':'#ffd8be70';ctx.fillRect(x0+post,y0+5*c.p,Math.max(0,width-post*2),3*c.p);textDraw(op.op+(op.n||''),c.x,y0+height*.46,Math.max(9,45*c.p),strong,'center',1000);ctx.globalAlpha=1;
+  function drawGate(g){const dz=g.z-game.world;if(dz<-.6||dz>125)return;
+    const next=game.groups.find(other=>!other.used);
+    const forecast=g===next&&dz<34&&dz>0;
+    const better=forecast?Math.max(gateOutcome(game.troops,g.left),gateOutcome(game.troops,g.right)):0;
+    for(const side of [-1,1]){const op=side<0?g.left:g.right,x=side*1.72,c=projected(x,g.z),width=Math.min(W*.2,H*.26)*c.p*2.05,height=160*c.p*(H/760)**.28,good=op.op==='+'||op.op==='×',color=good?'#84f7be':'#ff8589',strong=good?'#e6ffd9':'#ffe5e0';if(c.p<.1)continue;
+      const x0=c.x-width/2,y0=c.y-height,post=Math.max(2,8*c.p);ctx.globalAlpha=g.used?.15:.9;roundRect(x0,y0,width,height,6*c.p,good?'#4ac89936':'#ea68643d');line(x0,y0,x0+width,y0,color,post);line(x0,y0,x0,c.y,color,post);line(x0+width,y0,x0+width,c.y,color,post);ctx.fillStyle=good?'#dcffae66':'#ffd8be70';ctx.fillRect(x0+post,y0+5*c.p,Math.max(0,width-post*2),3*c.p);textDraw(op.op+(op.n||''),c.x,y0+height*(forecast?.34:.46),Math.max(9,45*c.p),strong,'center',1000);
+      if(forecast){
+        const result=gateOutcome(game.troops,op),best=result===better;
+        textDraw(`≈ ${result} tropas`,c.x,y0+height*.71,Math.max(9,22*c.p),best?'#f0ffb3':'#e0eddd','center',900);
+        if(best&&result!==gateOutcome(game.troops,side<0?g.right:g.left)){
+          line(x0+width*.12,y0+height*.86,x0+width*.88,y0+height*.86,'#dcf97b',Math.max(1,4*c.p));
+        }
+      }
+      ctx.globalAlpha=1;
     }}
   function drawHazard(o){const q=projected(o.x,o.z),s=40*q.p;if(q.dz< -1||q.dz>130)return;ctx.save();ctx.translate(q.x,q.y);ctx.globalAlpha=o.used?.25:1;ctx.fillStyle='#34272266';ctx.beginPath();ctx.ellipse(0,5*q.p,s*.65,s*.25,0,0,7);ctx.fill();if(o.variant==='spikes'){for(let i=-1;i<=1;i++){poly([[i*s*.34-s*.2,0],[i*s*.34,-s*.95],[i*s*.34+s*.22,0]],'#d8dad2','#4d6670');}}else{roundRect(-s*.43,-s*1.04,s*.86,s*.97,5*q.p,'#a7493c');roundRect(-s*.46,-s*.97,s*.92,8*q.p,2,'#e89d6e');roundRect(-s*.46,-s*.37,s*.92,8*q.p,2,'#e89d6e');textDraw('!',0,-s*.62,Math.max(7,s*.48),'#fff0ad')}ctx.restore();}
   function drawCrate(o){const q=projected(o.x,o.z),s=52*q.p;if(q.dz< -1||q.dz>130)return;ctx.save();ctx.globalAlpha=o.used?.22:1;ctx.translate(q.x,q.y);ctx.rotate(Math.sin(t*2.5+o.z)*.04);roundRect(-s*.5,-s*.88,s,s*.88,5*q.p,'#f3bf66');roundRect(-s*.5,-s*.88,s,s*.18,3*q.p,'#ffe0a0');roundRect(-s*.4,-s*.66,s*.8,s*.44,3*q.p,'#94613d');textDraw('ATK',0,-s*.44,Math.max(7,s*.34),'#ffeda0');line(-s*.5,-s*.08,s*.5,-s*.08,'#d4864a',4*q.p);ctx.restore();}
@@ -195,7 +232,7 @@
   function frame(ms){requestAnimationFrame(frame);const dt=Math.min((ms-last)/1000||0,.05);last=ms;t+=dt;update(dt);drawWorld(dt);} 
   mainMenu();requestAnimationFrame(frame);
   // Small read-only test surface for deterministic browser smoke tests.
-  Object.defineProperty(window,'__MBS_TEST__',{value:Object.freeze({getState:()=>state,getSnapshot:()=>game&&({level:game.n,world:game.world,troops:game.troops,attack:game.attack,bossHp:game.bossHp,hero:game.hero,score:game.score}),getProgress:()=>({...progress}),levelData:n=>levelData(clamp(n,1,12))})});
+  Object.defineProperty(window,'__MBS_TEST__',{value:Object.freeze({getState:()=>state,getSnapshot:()=>game&&({level:game.n,world:game.world,x:game.x,troops:game.troops,attack:game.attack,bossHp:game.bossHp,hero:game.hero,score:game.score}),getProgress:()=>({...progress}),gateOutcome,levelData:n=>levelData(clamp(n,1,12))})});
 })();
 </script>
 </body>
