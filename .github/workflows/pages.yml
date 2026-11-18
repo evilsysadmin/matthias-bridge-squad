@@ -10,8 +10,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: bridgesquad-smoke-${{ github.ref }}
-  cancel-in-progress: true
+  # Only superseded PR revisions may be cancelled; every main SHA must finish.
+  group: bridgesquad-smoke-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   smoke:
@@ -26,9 +27,17 @@ jobs:
       - name: Test private release packaging contract (offline)
         run: python -m unittest discover -s tests -p test_build_release.py -v
       - name: Install browser smoke test dependencies
-        run: |
-          python -m pip install 'playwright>=1.50,<2'
-          python -m playwright install --with-deps chromium
+        run: python -m pip install 'playwright>=1.50,<2'
+      - name: Resolve installed Playwright version for exact Chromium cache
+        id: playwright
+        run: python -c 'from importlib.metadata import version; print("version=" + version("playwright"))' >> "$GITHUB_OUTPUT"
+      - name: Restore Playwright Chromium browser cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: bridgesquad-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+      - name: Install exact Playwright Chromium and system dependencies
+        run: python -m playwright install --with-deps chromium
       - name: Verify desktop, mobile and 12 levels
         run: python smoke_test.py
 
