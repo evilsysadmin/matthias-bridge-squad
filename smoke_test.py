@@ -65,6 +65,10 @@ TEST_HTML = HTML.replace(
     window.__testSetupHazardWithEscort__ = () => {
       start(2);
       const hazard=game.objects.find(o=>o.type==='hazard');
+      // Already passed gates must not fire again when a test fixture jumps
+      // forward in the same level; otherwise the previous gate adds troops
+      // while the hazard subtracts them and masks the real casualty.
+      for(const gate of game.groups)if(gate.z<hazard.z)gate.used=true;
       game.world=hazard.z-.3;game.speed=0;
       game.x=hazard.x;targetX=hazard.x;game.troops=25;
       game.hero=true;game.heroGuard=true;
