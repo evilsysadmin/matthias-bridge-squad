@@ -193,6 +193,24 @@ with sync_playwright() as p:
     profile.route('https://id.shadowops.dpdns.org/api/identity/token',token_route)
     profile.goto(protected+'/')
     profile.wait_for_function("window.__MBS_TEST__ && __MBS_TEST__.getState()==='menu'")
+    # Production-only navigation enters IdP's explicit logout confirmation.
+    # Local development never displays the production sign-out link.
+    signout_url='https://id.shadowops.dpdns.org/logout?app=bridgesquad'
+    assert page.locator('a[href="'+signout_url+'"]').count()==0
+    signout_link='a[href="'+signout_url+'"]'
+    assert profile.locator(signout_link).count()==1, 'signed-in menu needs a logout/account-switch link'
+    profile.locator('[data-action="play"]').click()
+    profile.keyboard.press('p')
+    assert profile.evaluate('__MBS_TEST__.getState()')=='paused'
+    assert profile.locator(signout_link).count()==1, 'pause must provide logout without losing the menu'
+    profile.locator('[data-action="menu"]').click()
+    profile.route(signout_url, lambda route: route.fulfill(status=200,
+        body='<html><title>Simulated Identity signout confirmation</title></html>',
+        content_type='text/html'))
+    profile.locator(signout_link).click()
+    assert profile.url==signout_url, 'logout must navigate to exact production IdP'
+    profile.go_back()
+    profile.wait_for_function("window.__MBS_TEST__ && __MBS_TEST__.getState()==='menu'")
     profile.evaluate("(s) => localStorage.setItem('shadowops.mbs.progress.v1:'+s,JSON.stringify({unlocked:9,stars:[3],wins:8}))",subject_a)
     profile.reload()
     profile.wait_for_function("window.__MBS_TEST__ && __MBS_TEST__.getProgress().unlocked===9")
