@@ -49,6 +49,35 @@ TEST_HTML = HTML.replace(
     window.__testKillSentry__ = () => {
       game.objects.find(o=>o.type==='enemy').hp=0;
     };
+    // Use real cage liberation and combat update paths: fixtures only
+    // position the squad, never skip the rescue/impact mechanics.
+    window.__testSetupRescue__ = () => {
+      start(2);
+      const cage=game.objects.find(o=>o.type==='cage');
+      game.world=cage.z-5;game.speed=0;
+      game.x=cage.x;targetX=cage.x;game.troops=45;
+      cage.hp=1;
+    };
+    window.__testGrantEscort__ = () => {
+      game.hero=true;game.heroGuard=true;
+      hudUpdate();
+    };
+    window.__testSetupHazardWithEscort__ = () => {
+      start(2);
+      const hazard=game.objects.find(o=>o.type==='hazard');
+      game.world=hazard.z-.3;game.speed=0;
+      game.x=hazard.x;targetX=hazard.x;game.troops=25;
+      game.hero=true;game.heroGuard=true;
+      hudUpdate();
+    };
+    window.__testSetupBossWithEscort__ = () => {
+      start(4);
+      game.world=game.length-14;game.speed=0;
+      game.x=0;targetX=0;game.troops=30;
+      game.bossHp=99999;game.bossPhase=2;game.bossClock=.97;game.bossAim=0;
+      game.hero=true;game.heroGuard=true;
+      state='boss';hudUpdate();
+    };
     requestAnimationFrame(frame);'''
 )
 
@@ -149,6 +178,49 @@ with sync_playwright() as p:
     assert neutralized['troops']==troops and neutralized['used']
     assert neutralized['windup']==0 and neutralized['aimX'] is None
     print('OK neutralizing a sentry cancels its pending attack')
+
+
+    # Rescuing the prisoner now matters in combat: one ranged hit can
+    # be intercepted. The actual cage, sentry and boss update paths are used.
+    for width,height in [(1440,900),(390,844)]:
+        escort_page=browser.new_page(viewport={'width':width,'height':height})
+        escort_page.set_content(TEST_HTML)
+        assert escort_page.locator('#heroGuard').is_hidden()
+        escort_page.evaluate('__testSetupRescue__()')
+        escort_page.evaluate('__testStep__(.1)')
+        rescue=escort_page.evaluate('__MBS_TEST__.getSnapshot()')
+        assert rescue['hero'] and rescue['heroGuard'] and rescue['heroBlocks']==0, rescue
+        assert escort_page.locator('#heroGuard').is_visible()
+        assert 'ESCUDO LISTO' in escort_page.locator('#heroGuard').inner_text()
+        assert escort_page.evaluate("document.documentElement.scrollWidth <= innerWidth"), 'escort HUD overflows horizontally'
+        escort_page.evaluate('__testSetupSentry__()')
+        escort_page.evaluate('__testGrantEscort__()')
+        troops=escort_page.evaluate('__MBS_TEST__.getSnapshot().troops')
+        escort_page.evaluate('__testStep__(.1,0)')
+        escort_page.evaluate('__testStep__(1.1,0)')
+        blocked=escort_page.evaluate('__MBS_TEST__.getSnapshot()')
+        assert blocked['troops']==troops and blocked['heroBlocks']==1 and not blocked['heroGuard'], blocked
+        assert escort_page.locator('#heroGuard').is_hidden(), 'used shield must vanish'
+        # The same sentry's second volley must actually hurt after the escort
+        # spends its only charge (no recurring invulnerability).
+        escort_page.evaluate('__testStep__(2.3,0)')
+        escort_page.evaluate('__testStep__(1.1,0)')
+        second=escort_page.evaluate('__MBS_TEST__.getSnapshot()')
+        assert second['troops'] < troops and second['heroBlocks']==1, second
+        escort_page.evaluate('__testSetupHazardWithEscort__()')
+        before=escort_page.evaluate('__MBS_TEST__.getSnapshot().troops')
+        escort_page.evaluate('__testStep__(.1)')
+        hazard=escort_page.evaluate('__MBS_TEST__.getSnapshot()')
+        assert hazard['troops'] < before and hazard['heroGuard'] and hazard['heroBlocks']==0, hazard
+        escort_page.evaluate('__testSetupBossWithEscort__()')
+        before=escort_page.evaluate('__MBS_TEST__.getSnapshot().troops')
+        escort_page.evaluate('__testStep__(.1,0)')
+        boss=escort_page.evaluate('__MBS_TEST__.getSnapshot()')
+        assert boss['troops']==before and boss['heroBlocks']==1 and not boss['heroGuard'], boss
+        escort_page.evaluate('__testStart__(2)')
+        assert not escort_page.evaluate('__MBS_TEST__.getSnapshot().heroGuard'), 'retry must reset shield'
+        escort_page.close()
+        print('OK hero rescue, single sentry/boss interception and hazard vulnerability at', width)
 
     # Simulate the production edge JSON endpoint on the exact host. These are
     # browser-isolation tests, NOT proof of a live ShadowOps ID deployment.
