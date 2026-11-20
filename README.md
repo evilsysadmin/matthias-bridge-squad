@@ -11,7 +11,7 @@ La dirección de producción solicitada es **https://bridgesquad.shadowops.dpdns
 - **P o Escape:** pausa; **R:** reinicio; **M:** sonido.
 - El escuadrón dispara automáticamente cuando está alineado con los enemigos o el prisionero.
 - **Tiradores enemigos:** cuando entras en su alcance, fijan tu posición y señalan con una marca roja el punto de impacto. Dispones de un segundo para esquivarla, o puedes neutralizar al enemigo antes de que abra fuego. El disparo no te persigue después de fijarte.
-- Cruza puertas verdes para sumar/multiplicar tropas: la puerta más próxima muestra una **previsión de tropas** (se recalcula si tu escuadrón cambia). Evita trampas, recoge cajas ATK y dispara a la jaula para rescatar al héroe.
+- Cruza puertas verdes para sumar/multiplicar tropas: la puerta más próxima muestra una **previsión de tropas** (se recalcula si tu escuadrón cambia). Evita trampas, recoge cajas ATK y dispara a la jaula para rescatar al héroe. **El héroe liberado acompaña a Matthias y bloquea exactamente una salva de tirador o artillería**: el indicador `🛡 HÉROE · ESCUDO LISTO` desaparece al gastarlo. No bloquea barriles ni pinchos, y recuperarlo requiere rescatarlo de nuevo en otra partida.
 - En la batalla final, **centra la escuadra para tener al jefe en la línea de tiro**. Fuera del carril central el daño se reduce hasta cero. En cuanto aparezca el aviso rojo de artillería, muévete al lateral para esquivarlo y vuelve al centro para atacar. El texto «EN MIRA» te confirma cuándo disparas con fuerza.
 
 ## Contenido
