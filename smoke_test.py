@@ -14,7 +14,14 @@ TEST_HTML = HTML.replace(
       if(x !== undefined){targetX=x;game.x=x;}
       for(let i=0;i<seconds*20;i++){
         if(state!=="playing" && state!=="boss")break;
-        if(state==="boss" && tacticalBoss){
+        if(state==="playing" && tacticalBoss){
+          // Play the actual lane-changing mechanics: when a sentry
+          // acquires a fixed aim point, steer away and stay out until
+          // the volley resolves. No teleporting or damage bypass.
+          const sentry=game.objects.find(o=>o.type==='enemy' &&
+             !o.used && o.shotTimer>0 && o.aimX!==null);
+          targetX=sentry?(sentry.aimX>=0?-2.85:2.85):x;
+        }else if(state==="boss" && tacticalBoss){
           // Fire down the center unless a red marker locks that lane;
           // then move across the telegraphed artillery footprint.
           const desired=game.bossPhase===2
