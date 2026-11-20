@@ -25,6 +25,23 @@ TEST_HTML = HTML.replace(
         t+=.05;update(.05);
       }
     };
+    // Test-only sentry fixture: deterministic fixed target inside the
+    // actual game update path, never inserted into production HTML.
+    window.__testSetupSentry__ = () => {
+      start(2);
+      const o=game.objects.find(o=>o.type==='enemy');
+      game.world=o.z-27;
+      game.speed=0;game.x=0;targetX=0;game.troops=18;
+      o.hp=999;o.maxHp=999;
+    };
+    window.__testSentryState__ = () => {
+      const o=game.objects.find(o=>o.type==='enemy');
+      return {aimX:o.aimX,windup:o.shotTimer,reload:o.reload,
+              used:o.used,troops:game.troops,score:game.score};
+    };
+    window.__testKillSentry__ = () => {
+      game.objects.find(o=>o.type==='enemy').hp=0;
+    };
     requestAnimationFrame(frame);'''
 )
 
@@ -94,6 +111,38 @@ with sync_playwright() as p:
     page.evaluate('__testStep__(0.8,0)')
     assert page.evaluate('__MBS_TEST__.getSnapshot().bossHp') < before, 'center firing must damage boss'
     print('OK boss requires center firing lane while leaving room to dodge')
+    # A mid-level sentry must place an advance red warning on the
+    # current lane. Staying still causes casualties; moving after the
+    # lock dodges, and killing the sentry interrupts an armed shot.
+    page.evaluate('__testSetupSentry__()')
+    page.evaluate('__testStep__(.1,0)')
+    warning=page.evaluate('__testSentryState__()')
+    assert warning['aimX']==0 and 0 < warning['windup'] <= 1, warning
+    before=warning['troops']
+    page.evaluate('__testStep__(1.1,0)')
+    hit=page.evaluate('__testSentryState__()')
+    assert hit['troops'] < before and hit['windup']==0, (warning,hit)
+    print('OK mid-level sentry telegraphs and damages a stationary squad')
+
+    page.evaluate('__testSetupSentry__()')
+    page.evaluate('__testStep__(.1,0)')
+    troops=page.evaluate('__testSentryState__().troops')
+    page.evaluate('__testStep__(1.1,3.05)')
+    dodged=page.evaluate('__testSentryState__()')
+    assert dodged['troops']==troops and dodged['score']>=35, dodged
+    assert dodged['aimX'] is None and dodged['windup']==0
+    print('OK dodging the fixed red marker preserves troops')
+
+    page.evaluate('__testSetupSentry__()')
+    page.evaluate('__testStep__(.1,0)')
+    troops=page.evaluate('__testSentryState__().troops')
+    page.evaluate('__testKillSentry__()')
+    page.evaluate('__testStep__(1.1,0)')
+    neutralized=page.evaluate('__testSentryState__()')
+    assert neutralized['troops']==troops and neutralized['used']
+    assert neutralized['windup']==0 and neutralized['aimX'] is None
+    print('OK neutralizing a sentry cancels its pending attack')
+
     # Simulate the production edge JSON endpoint on the exact host. These are
     # browser-isolation tests, NOT proof of a live ShadowOps ID deployment.
     from json import dumps

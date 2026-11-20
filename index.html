@@ -104,7 +104,7 @@
       groups.push({type:'gate',z,left,right,used:false,id:i});
       const hazardZ=z+12+(r()-.5)*3,side=r()>.5?1:-1;
       if(n>=2||i>0)objects.push({type:'hazard',z:hazardZ,x:side*1.62,used:false,strength:Math.ceil(3+n*.8+i),variant:r()>.4?'barrel':'spikes'});
-      if(n>1&&i<count-1){objects.push({type:'enemy',z:z+17,x:-side*1.64,hp:16+n*4+i*8,maxHp:16+n*4+i*8,strength:3+Math.floor(n*.7),used:false,shotTimer:0});}
+      if(n>1&&i<count-1){objects.push({type:'enemy',z:z+17,x:-side*1.64,hp:16+n*4+i*8,maxHp:16+n*4+i*8,strength:3+Math.floor(n*.7),used:false,shotTimer:0,aimX:null,reload:0});}
     }
     objects.push({type:'crate',z:length*.42,x:n%2?1.62:-1.62,used:false,bonus:0.45+(n>5?0.15:0)});
     objects.push({type:'cage',z:length*.61,x:n%2?-1.62:1.62,hp:20+n*4,maxHp:20+n*4,used:false,liberated:false,reinforcements:7+n*2});
@@ -117,7 +117,7 @@
   function showScreen(content){ui.screen.hidden=false;ui.modal.innerHTML=content;ui.hud.hidden=state==='menu'||state==='select';}
   function hideScreen(){ui.screen.hidden=true;ui.hud.hidden=false;}
   const btn=(action,label,klass='cta')=>`<button class="${klass}" data-action="${action}">${label}</button>`;
-  function mainMenu(){state='menu';game=makeGame(selectedStage);ui.hud.hidden=true;showScreen(`<p class="eyebrow">SHADOWOPS PRESENTA · ARCADE TÁCTICO</p><h1>MATTHIAS<br><em>BRIDGE</em><br>SQUAD</h1><p>Un ejército de peones. Puertas que multiplican tropas. Refuerzos prisioneros. Cajas de armamento. Y un jefe de muy mala leche al final del puente.</p><div class="featurechips"><span class="chip">⚔ 12 NIVELES</span><span class="chip">♟ MATTHIAS AL MANDO</span><span class="chip">✦ 3 ESTRELLAS POR NIVEL</span><span class="chip">▣ PROGRESO GUARDADO</span></div>${btn('play',`DESPLEGAR ESCUADRÓN · NIVEL ${String(selectedStage).padStart(2,'0')}  →`)}${btn('levels','Elegir nivel','secondary')}<p class="tiny" style="margin:17px 0 0">Mueve el ratón, arrastra o usa <span class="key">A</span> / <span class="key">D</span>. La tropa dispara automáticamente. En el jefe, esquiva los avisos rojos.</p><div class="footer">HECHO CON CARIÑO Y DISCIPLINA PRUSIANA</div>`);}
+  function mainMenu(){state='menu';game=makeGame(selectedStage);ui.hud.hidden=true;showScreen(`<p class="eyebrow">SHADOWOPS PRESENTA · ARCADE TÁCTICO</p><h1>MATTHIAS<br><em>BRIDGE</em><br>SQUAD</h1><p>Un ejército de peones. Puertas que multiplican tropas. Refuerzos prisioneros. Cajas de armamento. Y un jefe de muy mala leche al final del puente.</p><div class="featurechips"><span class="chip">⚔ 12 NIVELES</span><span class="chip">♟ MATTHIAS AL MANDO</span><span class="chip">✦ 3 ESTRELLAS POR NIVEL</span><span class="chip">▣ PROGRESO GUARDADO</span></div>${btn('play',`DESPLEGAR ESCUADRÓN · NIVEL ${String(selectedStage).padStart(2,'0')}  →`)}${btn('levels','Elegir nivel','secondary')}<p class="tiny" style="margin:17px 0 0">Mueve el ratón, arrastra o usa <span class="key">A</span> / <span class="key">D</span>. La tropa dispara sola. Esquiva las marcas rojas de los tiradores; al jefe se le dispara desde el centro.</p><div class="footer">HECHO CON CARIÑO Y DISCIPLINA PRUSIANA</div>`);}
   function levelsMenu(){state='select';game=makeGame(selectedStage);ui.hud.hidden=true;const cards=Array.from({length:12},(_,i)=>{const n=i+1,locked=n>progress.unlocked,stars=progress.stars[i];return `<button class="level ${n===selectedStage?'current':''}" data-action="pick" data-level="${n}" ${locked?'disabled':''}><strong>${locked?'🔒':String(n).padStart(2,'0')}</strong><span>${locked?'BLOQUEADO':stars?'★'.repeat(stars)+'☆'.repeat(3-stars):'SIN COMPLETAR'}</span></button>`}).join('');showScreen(`<p class="eyebrow">CAMPAÑA · MISIÓN EN CURSO</p><h2>Selecciona operación</h2><p>Supera cada jefe para desbloquear la siguiente misión. Las estrellas premian rescatar al héroe y conservar tropas.</p><div class="levels">${cards}</div><div class="stagename" id="selectedName">${selectedStage}. ${stageNames[selectedStage-1]}</div><div class="rule"></div>${btn('play','INICIAR OPERACIÓN →')}${btn('menu','← Volver al cuartel','secondary')}<div style="text-align:center;margin-top:20px"><button class="mutedlink" data-action="reset">Borrar progreso local</button></div>`);}
   function pauseMenu(){state='paused';showScreen(`<p class="eyebrow">ALTO EL FUEGO</p><h2>Operación en pausa</h2><p>Matthias te concede cinco segundos de descanso. No te acostumbres.</p>${btn('resume','REANUDAR OPERACIÓN →')}${btn('retry','Reiniciar nivel','secondary')}${btn('menu','Abandonar al cuartel','secondary')}`);}
   function endMenu(won){state=won?'won':'lost';const n=game.n;let stars=0,points=game.score+game.troops*12+Math.round((game.attack-1)*300)+game.kills*30;
@@ -165,8 +165,24 @@
         else if(o.type==='crate'&&dz<=.8){o.used=true;if(Math.abs(o.x-game.x)<1.23){game.attack=+(game.attack+o.bonus).toFixed(2);floatText(o.x,o.z,'ATK +'+o.bonus.toFixed(2),'#ffda83');burst(o.x,o.z,'#ffd080',23);if(t>toastUntil)say('<b>Matthias:</b> Armamento nuevo. Ahora sí que empieza la fiesta.',3);audio('boost')}else{floatText(o.x,o.z,'PERDIDO','#b5ced3')}}
         else if(o.type==='enemy'){
           if(o.hp>0&&dz<21&&dz>1&&Math.abs(o.x-game.x)<1.95){o.hp-=dt*game.troops*game.attack*.8;game.shots+=dt*12;if(Math.random()<dt*13)burst(o.x,o.z,'#ffcb92',3);}
-          if(o.hp<=0){o.used=true;game.kills++;game.score+=150;floatText(o.x,o.z,'ENEMIGO CAÍDO','#d7fc97');burst(o.x,o.z,'#ffb78b',14);}
-          else if(dz<.9){o.used=true;if(Math.abs(o.x-game.x)<1.55){casualty(Math.ceil(o.strength*(o.hp/o.maxHp)),'¡Nos han pillado sin cobertura!');if(state==='lost')return;}}
+          if(o.hp<=0){o.used=true;o.shotTimer=0;o.aimX=null;game.kills++;game.score+=150;floatText(o.x,o.z,'ENEMIGO CAÍDO','#d7fc97');burst(o.x,o.z,'#ffb78b',14);}
+          else if(dz<.9){o.used=true;o.shotTimer=0;o.aimX=null;if(Math.abs(o.x-game.x)<1.55){casualty(Math.ceil(o.strength*(o.hp/o.maxHp)),'¡Nos han pillado sin cobertura!');if(state==='lost')return;}}
+          else if(dz<31&&dz>1){
+            // Sentries lock a ground position, not the player's live location.
+            // Players have 1.0s to move; shooting the sentry interrupts it.
+            if(o.shotTimer>0){
+              o.shotTimer=Math.max(0,o.shotTimer-dt);
+              if(o.shotTimer===0){
+                if(Math.abs(game.x-o.aimX)<.88){casualty(Math.max(2,Math.ceil(o.strength*.48)),'¡Nos han fijado la posición! ¡Moveos!');if(state==='lost')return;}
+                else{game.score+=35;floatText(game.x,game.world+4,'ESQUIVADO','#b5ffb7');}
+                o.aimX=null;o.reload=2.1;
+              }
+            }else if(o.reload>0){o.reload=Math.max(0,o.reload-dt);}
+            else{
+              o.aimX=game.x;o.shotTimer=1.0;
+              if(game.gates>0&&t>toastUntil)say('<b>Matthias:</b> ¡Tiradores! ¡Apartaos de la marca roja!',2.3);
+            }
+          }
         }else if(o.type==='cage'){
           if(dz<27&&dz>1&&Math.abs(o.x-game.x)<1.9){o.hp-=dt*game.troops*game.attack*.95;game.shots+=dt*10;if(Math.random()<dt*10)burst(o.x,o.z,'#e7fdbc',2)}
           if(o.hp<=0&&!o.liberated){o.used=true;o.liberated=true;game.hero=true;game.troops=Math.min(MAX_TROOPS,game.troops+o.reinforcements);game.attack=+(game.attack+.25).toFixed(2);game.peak=Math.max(game.peak,game.troops);game.score+=500;floatText(o.x,o.z,'¡HÉROE LIBRE! +'+o.reinforcements,'#eafa8a');burst(o.x,o.z,'#d5ff8e',27);say('<b>Matthias:</b> ¡Un héroe rescatado! Seguro que este sí sabe obedecer.',3.4);audio('boost');}
@@ -226,7 +242,20 @@
   function drawCrate(o){const q=projected(o.x,o.z),s=52*q.p;if(q.dz< -1||q.dz>130)return;ctx.save();ctx.globalAlpha=o.used?.22:1;ctx.translate(q.x,q.y);ctx.rotate(Math.sin(t*2.5+o.z)*.04);roundRect(-s*.5,-s*.88,s,s*.88,5*q.p,'#f3bf66');roundRect(-s*.5,-s*.88,s,s*.18,3*q.p,'#ffe0a0');roundRect(-s*.4,-s*.66,s*.8,s*.44,3*q.p,'#94613d');textDraw('ATK',0,-s*.44,Math.max(7,s*.34),'#ffeda0');line(-s*.5,-s*.08,s*.5,-s*.08,'#d4864a',4*q.p);ctx.restore();}
   function drawCage(o){const q=projected(o.x,o.z),s=65*q.p;if(q.dz< -1||q.dz>130)return;ctx.save();ctx.translate(q.x,q.y);ctx.globalAlpha=o.used?.17:1;const bob=Math.sin(t*2)*2*q.p;roundRect(-s*.56,-s*1.35+bob,s*1.12,s*1.38,4*q.p,'#394850');roundRect(-s*.46,-s*1.19+bob,s*.92,s*1.07,3*q.p,'#b6eacb24');textDraw('♟',0,-s*.64+bob,Math.max(12,s*.62),'#effba1');for(let i=-2;i<=2;i++)line(i*s*.20,-s*1.32+bob,i*s*.20,-s*.02+bob,'#9ec1bd',Math.max(1,s*.055));line(-s*.56,-s*1.33+bob,s*.56,-s*1.33+bob,'#d8d6af',Math.max(2,s*.09));if(o.hp>0)healthBar(0,-s*1.6,s,8*q.p,o.hp/o.maxHp,'#d4f795');ctx.restore();}
   function healthBar(x,y,width,height,ratio,color){roundRect(x-width/2,y,width,height,Math.max(1,height/2),'#081c24dc');roundRect(x-width/2+2,y+2,Math.max(0,(width-4)*clamp(ratio,0,1)),Math.max(0,height-4),Math.max(1,height/2),color);}
-  function drawEnemy(o){const q=projected(o.x,o.z);if(q.dz< -1||q.dz>130)return;const s=46*q.p;ctx.save();ctx.translate(q.x,q.y);ctx.globalAlpha=o.used?.15:1;ctx.fillStyle='#0005';ctx.beginPath();ctx.ellipse(0,3*q.p,s*.6,s*.22,0,0,7);ctx.fill();roundRect(-s*.36,-s*1.25,s*.72,s*.72,4*q.p,'#a94755');roundRect(-s*.28,-s*1.71,s*.56,s*.53,s*.24,'#d77977');roundRect(-s*.3,-s*1.7,s*.6,s*.17,2,'#7d2f3b');roundRect(s*.2,-s*.9,s*.42,s*.12,1,'#384e52');textDraw('⚡',0,-s*.93,Math.max(7,s*.3),'#ffe49b');healthBar(0,-s*1.93,s*1.3,8*q.p,o.hp/o.maxHp,'#ff8e8b');ctx.restore();}
+  function drawEnemy(o){const q=projected(o.x,o.z);if(q.dz< -1||q.dz>130)return;const s=46*q.p;ctx.save();ctx.translate(q.x,q.y);ctx.globalAlpha=o.used?.15:1;ctx.fillStyle='#0005';ctx.beginPath();ctx.ellipse(0,3*q.p,s*.6,s*.22,0,0,7);ctx.fill();roundRect(-s*.36,-s*1.25,s*.72,s*.72,4*q.p,'#a94755');roundRect(-s*.28,-s*1.71,s*.56,s*.53,s*.24,'#d77977');roundRect(-s*.3,-s*1.7,s*.6,s*.17,2,'#7d2f3b');roundRect(s*.2,-s*.9,s*.42,s*.12,1,'#384e52');textDraw('⚡',0,-s*.93,Math.max(7,s*.3),'#ffe49b');healthBar(0,-s*1.93,s*1.3,8*q.p,o.hp/o.maxHp,'#ff8e8b');ctx.restore();
+    // Telegraph from the sentry to a FIXED spot on the player's lane.
+    // The red marker persists for the full windup but never follows a dodge.
+    if(o.shotTimer>0&&o.aimX!==null){
+      const hit=projected(o.aimX,game.world+4.4);
+      const pulse=.4+.3*Math.sin(t*17);
+      ctx.save();
+      line(q.x,q.y-s*1.1,hit.x,hit.y-8*hit.p,'#ff8067a8',Math.max(1,2.2*hit.p));
+      ctx.fillStyle=`rgba(255,88,82,${pulse})`;ctx.beginPath();
+      ctx.ellipse(hit.x,hit.y,Math.max(8,26*hit.p),Math.max(4,10*hit.p),0,0,Math.PI*2);ctx.fill();
+      textDraw('⚠',hit.x,hit.y-34*hit.p,Math.max(12,21*hit.p),'#ffd1a0');
+      ctx.restore();
+    }
+  }
   function drawBoss(){const q=projected(0,game.length),s=175*q.p;if(q.dz< -1||q.dz>140)return;ctx.save();ctx.translate(q.x,q.y);const wobble=Math.sin(t*2.6)*s*.02;ctx.fillStyle='#06151c6e';ctx.beginPath();ctx.ellipse(0,s*.08,s*.8,s*.27,0,0,7);ctx.fill();roundRect(-s*.69,-s*.37,s*1.38,s*.33,s*.15,'#2d363d');for(const i of [-1,1]){roundRect(i*s*.44-s*.21,-s*.4,s*.42,s*.38,s*.14,'#485258');for(let j=0;j<3;j++)line(i*s*.44-s*.15+j*s*.12,-s*.34,i*s*.44-s*.15+j*s*.12,-s*.09,'#85918a',Math.max(1,s*.03))}
     roundRect(-s*.46,-s*1.33+wobble,s*.92,s*.94,s*.13,'#6c4b45');roundRect(-s*.35,-s*1.58+wobble,s*.70,s*.42,s*.12,'#a96d5c');roundRect(-s*.38,-s*1.58+wobble,s*.76,s*.13,s*.06,'#d4a985');roundRect(-s*.23,-s*1.37+wobble,s*.46,s*.14,s*.05,'#ffbf81');roundRect(-s*.06,-s*1.03+wobble,s*.12,s*.35,s*.025,'#a2c7ba');roundRect(-s*.56,-s*1.14+wobble,s*.21,s*.55,s*.1,'#536369');roundRect(s*.34,-s*1.17+wobble,s*.45,s*.22,s*.04,'#39474d');roundRect(s*.60,-s*1.13+wobble,s*.34,s*.14,s*.03,'#c6a77d');textDraw('☠',0,-s*.82+wobble,Math.max(11,s*.33),'#fbe7be');
     if(game.bossPhase){textDraw(game.boss,0,-s*2.04,Math.max(9,s*.15),'#ffffff');healthBar(0,-s*1.87,s*2.1,Math.max(8,s*.13),game.bossHp/game.bossHP,'#ff8d80');const lined=bossAimFactor(game.x)>.65;textDraw(lined?'◉ EN MIRA':'↔ ALINEA LA ESCUADRA',0,-s*2.35,Math.max(9,s*.14),lined?'#d7ff9d':'#ffdf9c')}else{textDraw('JEFE FINAL',0,-s*1.85,Math.max(9,s*.14),'#ffd5a9')}
