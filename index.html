@@ -342,7 +342,7 @@
     mainMenu();requestAnimationFrame(frame);
   }
   // Small read-only test surface for deterministic browser smoke tests.
-  Object.defineProperty(window,'__MBS_TEST__',{value:Object.freeze({getState:()=>state,getSnapshot:()=>game&&({level:game.n,world:game.world,x:game.x,troops:game.troops,attack:game.attack,bossHp:game.bossHp,hero:game.hero,score:game.score}),getProgress:()=>({...progress}),gateOutcome,levelData:n=>levelData(clamp(n,1,12))})});
+  Object.defineProperty(window,'__MBS_TEST__',{value:Object.freeze({getState:()=>state,getIdentity:()=>({verified:!!identitySubject,expiresAt:identityExpiresAt}),getSnapshot:()=>game&&({level:game.n,world:game.world,x:game.x,troops:game.troops,attack:game.attack,bossHp:game.bossHp,hero:game.hero,score:game.score}),getProgress:()=>({...progress}),gateOutcome,levelData:n=>levelData(clamp(n,1,12))})});
 })();
 </script>
 </body>

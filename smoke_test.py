@@ -132,7 +132,7 @@ with sync_playwright() as p:
     assert profile.evaluate('__MBS_TEST__.getState()')=='playing'
     old_exp=profile.evaluate('__MBS_TEST__.getIdentity().expiresAt')
     profile.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
-    profile.wait_for_function("(previous) => __MBS_TEST__.getIdentity().expiresAt > previous",old_exp)
+    profile.wait_for_function("(previous) => __MBS_TEST__.getIdentity().expiresAt > previous",arg=old_exp)
     assert profile.evaluate('__MBS_TEST__.getState()')=='playing'
     assert current['exchanges']>=1
     assert profile.evaluate("Object.keys(localStorage).filter(k=>k.includes('token')||k.includes('jwt'))")==[]
