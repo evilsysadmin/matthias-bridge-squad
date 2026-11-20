@@ -11,7 +11,7 @@ La dirección de producción solicitada es **https://bridgesquad.shadowops.dpdns
 - **P o Escape:** pausa; **R:** reinicio; **M:** sonido.
 - El escuadrón dispara automáticamente cuando está alineado con los enemigos o el prisionero.
 - Cruza puertas verdes para sumar/multiplicar tropas: la puerta más próxima muestra una **previsión de tropas** (se recalcula si tu escuadrón cambia). Evita trampas, recoge cajas ATK y dispara a la jaula para rescatar al héroe.
-- En la batalla final, esquiva el área marcada en rojo mientras disparas al jefe.
+- En la batalla final, **centra la escuadra para tener al jefe en la línea de tiro**. Fuera del carril central el daño se reduce hasta cero. En cuanto aparezca el aviso rojo de artillería, muévete al lateral para esquivarlo y vuelve al centro para atacar. El texto «EN MIRA» te confirma cuándo disparas con fuerza.
 
 ## Contenido
 
@@ -36,7 +36,7 @@ python -m playwright install chromium
 python smoke_test.py
 ```
 
-Comprueba menús, controles, pausa, pronóstico de puertas, victoria/estrellas y una ruta ganadora por nivel en móvil y escritorio.
+Comprueba menús, controles, pausa, pronóstico de puertas, victoria/estrellas y una ruta ganadora por nivel en móvil y escritorio. También verifica que disparar desde fuera del carril no daña al jefe y que el regreso al centro sí permite atacar, con esquivas tácticas deterministas en los 12 niveles.
 
 ## Candidato de release protegido
 

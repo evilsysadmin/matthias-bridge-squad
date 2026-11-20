@@ -10,10 +10,18 @@ TEST_HTML = HTML.replace(
     'mainMenu();requestAnimationFrame(frame);',
     '''mainMenu();
     window.__testStart__ = n => start(n);
-    window.__testStep__ = (seconds, x) => {
+    window.__testStep__ = (seconds, x, tacticalBoss=false) => {
       if(x !== undefined){targetX=x;game.x=x;}
       for(let i=0;i<seconds*20;i++){
         if(state!=="playing" && state!=="boss")break;
+        if(state==="boss" && tacticalBoss){
+          // Fire down the center unless a red marker locks that lane;
+          // then move across the telegraphed artillery footprint.
+          const desired=game.bossPhase===2
+            ? (game.bossAim>=0?-2.85:2.85) : 0;
+          targetX=desired;
+          game.x=desired;
+        }
         t+=.05;update(.05);
       }
     };
@@ -49,11 +57,16 @@ with sync_playwright() as p:
         assert page.evaluate('__MBS_TEST__.gateOutcome(110, {op:"×", n:3})') == 120
         assert page.evaluate('__MBS_TEST__.gateOutcome(9, {op:"÷", n:2})') == 4
         assert page.evaluate('__MBS_TEST__.gateOutcome(9, {op:"−", n:99})') == 1
+        # Boss auto-fire is now an actual lane mechanic: it cannot deal
+        # any damage from the outside railing and peaks at center.
+        assert page.evaluate('__MBS_TEST__.bossAimFactor(0)') == 1
+        assert page.evaluate('__MBS_TEST__.bossAimFactor(-3.05)') == 0
+        assert 0 < page.evaluate('__MBS_TEST__.bossAimFactor(1.65)') < 1
         page.keyboard.press('p')
         assert page.evaluate('__MBS_TEST__.getState()') == 'paused'
         page.locator('[data-action="resume"]').click()
         assert page.evaluate('__MBS_TEST__.getState()') == 'playing'
-        page.evaluate('__testStep__(45,-1.65)')
+        page.evaluate('__testStep__(45,-1.65,true)')
         assert page.evaluate('__MBS_TEST__.getState()') == 'won'
         assert page.evaluate('__MBS_TEST__.getProgress().unlocked') == 2
         assert page.evaluate('__MBS_TEST__.getProgress().stars[0]') == 3
@@ -68,10 +81,19 @@ with sync_playwright() as p:
         outcomes=[]
         for side in (-1.65,1.65):
             page.evaluate('n => __testStart__(n)',level)
-            page.evaluate('side => __testStep__(65, side)',side)
+            page.evaluate('side => __testStep__(65, side, true)',side)
             outcomes.append(page.evaluate('__MBS_TEST__.getState()'))
         assert 'won' in outcomes, (level,outcomes)
-    print('OK all 12 levels have at least one winning route on a fixed lane')
+    print('OK all 12 levels have at least one winning route with intentional boss aim/dodge')
+    page.evaluate('__testStart__(1)')
+    page.evaluate('__testStep__(20, -3.05)')
+    assert page.evaluate('__MBS_TEST__.getState()') == 'boss', 'lane boss must start'
+    before = page.evaluate('__MBS_TEST__.getSnapshot().bossHp')
+    page.evaluate('__testStep__(0.8,-3.05)')
+    assert page.evaluate('__MBS_TEST__.getSnapshot().bossHp') == before, 'outside lane must not damage boss'
+    page.evaluate('__testStep__(0.8,0)')
+    assert page.evaluate('__MBS_TEST__.getSnapshot().bossHp') < before, 'center firing must damage boss'
+    print('OK boss requires center firing lane while leaving room to dodge')
     # Simulate the production edge JSON endpoint on the exact host. These are
     # browser-isolation tests, NOT proof of a live ShadowOps ID deployment.
     from json import dumps
