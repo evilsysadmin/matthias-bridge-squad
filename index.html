@@ -236,30 +236,113 @@
   function drawWorld(dt){if(!game)return;ctx.save();if(screenShake>.1){ctx.translate((Math.random()-.5)*screenShake,(Math.random()-.5)*screenShake);screenShake*=.89;}drawBackground();drawBridge();const objs=[...game.groups,...game.objects,{type:'boss',z:game.length}].sort((a,b)=>b.z-a.z);for(const o of objs){if(o.type==='gate')drawGate(o);else if(o.type==='hazard')drawHazard(o);else if(o.type==='crate')drawCrate(o);else if(o.type==='enemy')drawEnemy(o);else if(o.type==='cage')drawCage(o);else if(o.type==='boss')drawBoss()}
     drawSquad();drawFloatingAndFx(dt);ctx.restore();}
   function frame(ms){requestAnimationFrame(frame);const dt=Math.min((ms-last)/1000||0,.05);last=ms;t+=dt;update(dt);drawWorld(dt);} 
-  // The public source can still run offline, but the canonical production host
-  // requires a real edge-verified ShadowOps ID session before rendering the menu.
-  // This check does not replace server-side enforcement in Cloudflare's Worker.
-  if(location.hostname==='bridgesquad.shadowops.dpdns.org'){
-    state='auth-check';
-    fetch('/api/bridgesquad/session',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(8000)})
-      .then(async response=>{
-        if(!response.ok)throw Error('session_denied');
-        const session=await response.json();
-        if(!session||session.identity!=='bridgesquad'||!/^([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/.test(session.subject))
-          throw Error('invalid_identity');
-        PROGRESS_KEY='shadowops.mbs.progress.v1:'+session.subject;
-        progress=loadProgress();
-        mainMenu();
-        requestAnimationFrame(frame);
-      }).catch(()=>{
-        state='auth-blocked';
-        showScreen('<p class="eyebrow">SHADOWOPS ID</p><h2>Acceso no disponible</h2><p>No se pudo verificar tu sesión. El juego no cargará sin una identidad válida.</p><a class="secondary" href="/">Reintentar</a>');
+  // Offline builds remain playable. Only the canonical HTTPS production host
+  // may request an edge-verified account and use a per-user campaign save.
+  // The Worker still enforces JWT signatures AND server-side freshness.
+  const productionHost=location.hostname==='bridgesquad.shadowops.dpdns.org';
+  const subjectPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  let identitySubject=null,identityExpiresAt=0,renewTimer=null,renewInFlight=false;
+  const nowSeconds=()=>Math.floor(Date.now()/1000);
+  function acceptedSession(session,subject=null){
+    const now=nowSeconds();
+    return session&&session.identity==='bridgesquad'&&
+      typeof session.subject==='string'&&subjectPattern.test(session.subject)&&
+      (subject===null||session.subject===subject)&&
+      Number.isSafeInteger(session.expires_at)&&
+      session.expires_at>now+2&&session.expires_at<=now+180;
+  }
+  function lockIdentity(){
+    if(renewTimer!==null)clearTimeout(renewTimer);
+    renewTimer=null;identitySubject=null;identityExpiresAt=0;
+    PROGRESS_KEY='shadowops.mbs.progress.v1';progress=loadProgress();
+    state='auth-blocked';game=null;keys.clear();
+    showScreen('<p class="eyebrow">SHADOWOPS ID</p><h2>Sesión no disponible</h2><p>Tu sesión ha caducado, ha sido revocada o pertenece a otra cuenta. Vuelve a autenticarte para seguir jugando.</p><a class="secondary" href="/">Volver a ShadowOps ID</a>');
+    ui.hud.hidden=true;
+  }
+  function scheduleRenew(delay){
+    if(renewTimer!==null)clearTimeout(renewTimer);
+    renewTimer=null;
+    if(!identitySubject||document.hidden||state==='auth-blocked')return;
+    const remaining=identityExpiresAt*1000-Date.now()-45000;
+    renewTimer=setTimeout(()=>void renewIdentity(),delay??Math.max(8000,remaining));
+  }
+  async function renewIdentity(){
+    if(renewInFlight||!identitySubject||state==='auth-blocked')return;
+    renewInFlight=true;
+    if(renewTimer!==null)clearTimeout(renewTimer);
+    renewTimer=null;
+    let failure='temporary';
+    try{
+      // No JWT is persisted or placed in the address bar. It exists only for
+      // the HTTPS token exchange into a Secure HttpOnly first-party cookie.
+      const tokenResponse=await fetch('https://id.shadowops.dpdns.org/api/identity/token',{
+        method:'POST',credentials:'include',cache:'no-store',
+        headers:{'Content-Type':'application/json'},body:'{}',
+        signal:AbortSignal.timeout(8000)
       });
+      if(tokenResponse.status===401||tokenResponse.status===403)failure='revoked';
+      if(!tokenResponse.ok)throw Error('identity_token_unavailable');
+      const payload=await tokenResponse.json();
+      if(!payload||typeof payload.token!=='string'||payload.token.length>8192)throw Error('invalid_token');
+      const exchanged=await fetch('/api/bridgesquad/session',{
+        method:'POST',credentials:'same-origin',cache:'no-store',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({token:payload.token}),signal:AbortSignal.timeout(8000)
+      });
+      if(exchanged.status===401||exchanged.status===403)failure='revoked';
+      if(!exchanged.ok)throw Error('edge_session_denied');
+      const session=await exchanged.json();
+      if(!acceptedSession(session,identitySubject)){
+        failure='revoked';throw Error('identity_subject_changed_or_expired');
+      }
+      identityExpiresAt=session.expires_at;
+      scheduleRenew();
+      return;
+    }catch{
+      if(failure==='revoked'||nowSeconds()>=identityExpiresAt-2){
+        lockIdentity();
+      }else{
+        // Transient IdP outage: keep the existing, still-fresh session and
+        // retry briefly. Never silently switch the account used for saves.
+        scheduleRenew(10000);
+      }
+    }finally{
+      renewInFlight=false;
+    }
+  }
+  document.addEventListener('visibilitychange',()=>{
+    if(!productionHost||!identitySubject)return;
+    if(document.hidden){
+      if(renewTimer!==null)clearTimeout(renewTimer);
+      renewTimer=null;
+    }else{
+      void renewIdentity();
+    }
+  });
+  if(productionHost){
+    if(location.protocol!=='https:'){
+      lockIdentity();
+    }else{
+      state='auth-check';
+      fetch('/api/bridgesquad/session',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(8000)})
+        .then(async response=>{
+          if(!response.ok)throw Error('session_denied');
+          const session=await response.json();
+          if(!acceptedSession(session))throw Error('invalid_identity');
+          identitySubject=session.subject;
+          identityExpiresAt=session.expires_at;
+          PROGRESS_KEY='shadowops.mbs.progress.v1:'+identitySubject;
+          progress=loadProgress();
+          mainMenu();
+          requestAnimationFrame(frame);
+          scheduleRenew();
+        }).catch(()=>lockIdentity());
+    }
   }else{
     mainMenu();requestAnimationFrame(frame);
   }
   // Small read-only test surface for deterministic browser smoke tests.
-  Object.defineProperty(window,'__MBS_TEST__',{value:Object.freeze({getState:()=>state,getSnapshot:()=>game&&({level:game.n,world:game.world,x:game.x,troops:game.troops,attack:game.attack,bossHp:game.bossHp,hero:game.hero,score:game.score}),getProgress:()=>({...progress}),gateOutcome,levelData:n=>levelData(clamp(n,1,12))})});
+  Object.defineProperty(window,'__MBS_TEST__',{value:Object.freeze({getState:()=>state,getIdentity:()=>({verified:!!identitySubject,expiresAt:identityExpiresAt}),getSnapshot:()=>game&&({level:game.n,world:game.world,x:game.x,troops:game.troops,attack:game.attack,bossHp:game.bossHp,hero:game.hero,score:game.score}),getProgress:()=>({...progress}),gateOutcome,levelData:n=>levelData(clamp(n,1,12))})});
 })();
 </script>
 </body>

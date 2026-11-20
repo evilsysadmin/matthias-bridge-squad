@@ -78,15 +78,41 @@ with sync_playwright() as p:
     protected='https://bridgesquad.shadowops.dpdns.org'
     subject_a='123e4567-e89b-42d3-a456-426614174000'
     subject_b='123e4567-e89b-42d3-a456-426614174001'
-    current={'sub':subject_a,'active':True}
+    from time import time
+    current={'sub':subject_a,'active':True,'token_status':200,'token_subject':None,
+             'exchanges':0,'checks':0}
     profile=browser.new_page()
     profile.route(protected+'/', lambda route: route.fulfill(status=200,body=HTML,content_type='text/html'))
     def identity_route(route):
+        is_exchange=route.request.method=='POST'
         if not current['active']:
             route.fulfill(status=401,body='{"error":"authentication_required"}',content_type='application/json')
+        elif is_exchange:
+            body=route.request.post_data_json
+            assert body=={'token':'synthetic-ephemeral-test-token'}
+            assert route.request.headers.get('origin')==protected
+            current['exchanges']+=1
+            sub=current['token_subject'] or current['sub']
+            route.fulfill(status=200,body=dumps({'identity':'bridgesquad','subject':sub,
+                 'expires_at':int(time())+118}),content_type='application/json')
         else:
-            route.fulfill(status=200,body=dumps({'identity':'bridgesquad','subject':current['sub']}),content_type='application/json')
+            current['checks']+=1
+            route.fulfill(status=200,body=dumps({'identity':'bridgesquad',
+                 'subject':current['sub'],'expires_at':int(time())+70}),
+                 content_type='application/json')
     profile.route(protected+'/api/bridgesquad/session', identity_route)
+    cors={'Access-Control-Allow-Origin':protected,'Access-Control-Allow-Credentials':'true',
+          'Access-Control-Allow-Headers':'Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS'}
+    def token_route(route):
+        if route.request.method=='OPTIONS':
+            route.fulfill(status=204,headers=cors)
+        elif current['token_status']!=200:
+            route.fulfill(status=current['token_status'],headers=cors,
+                          body='{"error":"authentication_required"}',content_type='application/json')
+        else:
+            route.fulfill(status=200,headers=cors,
+                          body='{"token":"synthetic-ephemeral-test-token"}',content_type='application/json')
+    profile.route('https://id.shadowops.dpdns.org/api/identity/token',token_route)
     profile.goto(protected+'/')
     profile.wait_for_function("window.__MBS_TEST__ && __MBS_TEST__.getState()==='menu'")
     profile.evaluate("(s) => localStorage.setItem('shadowops.mbs.progress.v1:'+s,JSON.stringify({unlocked:9,stars:[3],wins:8}))",subject_a)
@@ -99,9 +125,42 @@ with sync_playwright() as p:
     current['sub']=subject_a
     profile.reload()
     profile.wait_for_function("window.__MBS_TEST__ && __MBS_TEST__.getProgress().unlocked===9")
+    # A short-lived edge cookie must renew seamlessly without navigating or
+    # restarting the active level. IdP returns a transient bearer token; only
+    # the new HttpOnly Worker cookie persists (the browser script never saves JWTs).
+    profile.locator('[data-action="play"]').click()
+    assert profile.evaluate('__MBS_TEST__.getState()')=='playing'
+    old_exp=profile.evaluate('__MBS_TEST__.getIdentity().expiresAt')
+    profile.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+    profile.wait_for_function("(previous) => __MBS_TEST__.getIdentity().expiresAt > previous",arg=old_exp)
+    assert profile.evaluate('__MBS_TEST__.getState()')=='playing'
+    assert current['exchanges']>=1
+    assert profile.evaluate("Object.keys(localStorage).filter(k=>k.includes('token')||k.includes('jwt'))")==[]
+    print('OK production session renews from ShadowOps ID without losing the active level')
+
+    # A signed-in IdP switching subjects during renewal must NOT migrate,
+    # overwrite or reuse the previous account's campaign.
+    current['token_subject']=subject_b
+    profile.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+    profile.wait_for_function("__MBS_TEST__.getState()==='auth-blocked'")
+    assert not profile.evaluate('__MBS_TEST__.getIdentity().verified')
+    assert profile.evaluate("(sub) => JSON.parse(localStorage.getItem('shadowops.mbs.progress.v1:'+sub)).unlocked",subject_a)==9
+    print('OK changed account during renewal locks old campaign without save crossover')
+
+    # An explicitly revoked IdP session must lock the currently open game,
+    # not just protect the next HTML navigation.
+    current['token_subject']=None
+    current['sub']=subject_a
+    profile.reload()
+    profile.wait_for_function("__MBS_TEST__.getState()==='menu'")
+    current['token_status']=401
+    profile.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+    profile.wait_for_function("__MBS_TEST__.getState()==='auth-blocked'")
+    current['token_status']=200
+
     current['active']=False
     profile.reload()
     profile.wait_for_function("window.__MBS_TEST__ && __MBS_TEST__.getState()==='auth-blocked'")
-    print('OK production-host identity bootstrap, account-separated saves and denied-session lock')
+    print('OK production bootstrap, renewal, account isolation and revoked-session lock')
     profile.close()
     browser.close()
