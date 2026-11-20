@@ -27,7 +27,7 @@ jobs:
       - name: Test private release packaging contract (offline)
         run: python -m unittest discover -s tests -p test_build_release.py -v
       - name: Install browser smoke test dependencies
-        run: python -m pip install 'playwright>=1.50,<2'
+        run: python -m pip install --disable-pip-version-check 'playwright==1.65.2'
       - name: Resolve installed Playwright version for exact Chromium cache
         id: playwright
         run: python -c 'from importlib.metadata import version; print("version=" + version("playwright"))' >> "$GITHUB_OUTPUT"
