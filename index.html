@@ -17,7 +17,7 @@
     .brand strong{display:block;font-weight:900;font-size:clamp(12px,1.5vw,17px);letter-spacing:.1em;line-height:1.15}.brand small{color:#b1dacd;font-size:10px;letter-spacing:.22em;font-weight:900}
     .scoreboard{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}.stat{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:74px;padding:8px 14px;background:rgba(8,30,34,.68);border:1px solid #c6ffde2a;border-radius:12px;backdrop-filter:blur(12px);box-shadow:0 4px 24px #0002}.stat .value{font-size:clamp(18px,2.2vw,26px);font-weight:950;line-height:1.15;font-variant-numeric:tabular-nums}.stat .label{font-size:9px;font-weight:900;letter-spacing:.17em;color:#9dcac6;margin-top:4px}.stat.soldiers .value{color:var(--aqua)}.stat.attack .value{color:var(--orange)}
     .actions{display:flex;gap:7px;pointer-events:auto}.iconbtn{display:grid;place-items:center;width:43px;height:43px;border-radius:12px;background:#071b229c;border:1px solid #c6ffde40;color:#ebfff4;font-size:18px;cursor:pointer;backdrop-filter:blur(10px);transition:background .14s,transform .14s}.iconbtn:hover,.iconbtn:focus-visible{background:#305b59;transform:translateY(-1px)}.iconbtn:disabled{opacity:.4;cursor:default}
-    .bottom{display:flex;flex-direction:column;align-items:center;gap:14px}.progress{height:9px;width:min(560px,70vw);background:#103c43b5;border:1px solid #d4ffed4d;border-radius:50px;overflow:hidden}.bar{height:100%;width:0;background:linear-gradient(90deg,#66e3ca,#d5f67a);border-radius:inherit;transition:width .2s;box-shadow:0 0 20px #d2ff89}
+    .bottom{display:flex;flex-direction:column;align-items:center;gap:10px}.guard-chip{font-size:11px;font-weight:900;letter-spacing:.08em;color:#f1ffcb;text-shadow:0 2px 9px #092b24;padding:5px 12px;border:1px solid #d8fa9f70;border-radius:18px;background:#214b3eb8}.guard-chip[hidden]{display:none}.progress{height:9px;width:min(560px,70vw);background:#103c43b5;border:1px solid #d4ffed4d;border-radius:50px;overflow:hidden}.bar{height:100%;width:0;background:linear-gradient(90deg,#66e3ca,#d5f67a);border-radius:inherit;transition:width .2s;box-shadow:0 0 20px #d2ff89}
     .lowerrow{width:100%;display:flex;align-items:end;justify-content:space-between;gap:12px}.toast{display:flex;align-items:center;gap:11px;max-width:570px;border:1px solid #c8fff23d;background:#06252bb8;border-radius:13px;padding:11px 15px;backdrop-filter:blur(12px);color:#efffef;font-size:clamp(11px,1.3vw,13px);font-weight:600;line-height:1.4;box-shadow:0 9px 32px #001c24a8}.toast .mhead{font-size:25px}.toast b{color:#dbffa1}.hint{color:#e0eee8;font-size:11px;font-weight:700;letter-spacing:.07em;text-shadow:0 2px 6px #03181c;text-align:right}
     .screen{position:fixed;inset:0;z-index:5;display:grid;place-items:center;padding:18px;background:radial-gradient(ellipse at center,#0b303299,#03131be5 68%);backdrop-filter:blur(8px)}.screen[hidden],.hud[hidden],.toast[hidden]{display:none!important}
     .modal{position:relative;width:min(580px,96vw);max-height:min(92dvh,900px);overflow:auto;padding:clamp(25px,5vw,43px);border:1px solid #beffcf55;border-radius:25px;background:linear-gradient(155deg,rgba(16,55,55,.96),rgba(5,23,32,.97) 70%);box-shadow:0 25px 110px #000b,0 0 60px #7bf7be18;scrollbar-color:#3a766b transparent}
@@ -46,6 +46,7 @@
   </div>
   <div class="bottom">
     <div class="progress" role="progressbar" aria-label="Progreso de nivel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="bar" id="progressBar"></div></div>
+    <div class="guard-chip" id="heroGuard" role="status" aria-live="polite" hidden>🛡 HÉROE · ESCUDO LISTO</div>
     <div class="lowerrow"><div class="toast" id="toast"><span class="mhead">♟</span><span id="toastText"><b>Matthias:</b> Formación, desgraciados.</span></div><span class="hint" id="controlHint">ARRASTRA / RATÓN / A · D PARA MOVERTE</span></div>
   </div>
 </div>
@@ -54,7 +55,7 @@
 (() => {
   'use strict';
   const $=s=>document.querySelector(s), canvas=$('#game'), ctx=canvas.getContext('2d',{alpha:false});
-  const ui={hud:$('#hud'),screen:$('#screen'),modal:$('#modal'),stage:$('#stageNo'),count:$('#soldierCount'),atk:$('#attackValue'),prog:$('#progressBar'),progress:$('.progress'),toast:$('#toast'),toastText:$('#toastText'),mute:$('#muteBtn'),pause:$('#pauseBtn')};
+  const ui={hud:$('#hud'),screen:$('#screen'),modal:$('#modal'),stage:$('#stageNo'),count:$('#soldierCount'),atk:$('#attackValue'),guard:$('#heroGuard'),prog:$('#progressBar'),progress:$('.progress'),toast:$('#toast'),toastText:$('#toastText'),mute:$('#muteBtn'),pause:$('#pauseBtn')};
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), lerp=(a,b,t)=>a+(b-a)*t;
   const rand=(seed)=>{let s=seed>>>0;return()=>{s=(Math.imul(1664525,s)+1013904223)>>>0;return s/4294967296}};
   const safeRead=(key,fallback)=>{try{const data=JSON.parse(localStorage.getItem(key));return data??fallback}catch{return fallback}};
@@ -111,7 +112,7 @@
     if(n>3){objects.push({type:'crate',z:length*.78,x:n%2?-1.62:1.62,used:false,bonus:0.35});}
     return {n,name:stageNames[n-1],boss:bossNames[n-1],length,bossHP:140+n*75+(n>=8?100:0),bossFire:2.7-n*.055,start:7+(n>=6?2:0),speed:10.5+(n>6?1.1:0),theme:stageThemes[n-1],groups,objects:objects.sort((a,b)=>a.z-b.z)};
   }
-  function makeGame(n){const data=levelData(n);return {...data,world:0,x:-1.65,tx:-1.65,troops:data.start,attack:1,hero:false,bossHp:data.bossHP,bossClock:0,bossPhase:0,bossAim:0,bossBlast:0,score:0,kills:0,gates:0,elapsed:0,peak:data.start,shots:0,stageClear:false,message:'',gateChosen:[]};}
+  function makeGame(n){const data=levelData(n);return {...data,world:0,x:-1.65,tx:-1.65,troops:data.start,attack:1,hero:false,heroGuard:false,heroBlocks:0,bossHp:data.bossHP,bossClock:0,bossPhase:0,bossAim:0,bossBlast:0,score:0,kills:0,gates:0,elapsed:0,peak:data.start,shots:0,stageClear:false,message:'',gateChosen:[]};}
   function resize(){W=innerWidth;H=innerHeight;DPR=Math.min(devicePixelRatio||1,2);canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);ctx.setTransform(DPR,0,0,DPR,0,0);}
   addEventListener('resize',resize);resize();
   function showScreen(content){ui.screen.hidden=false;ui.modal.innerHTML=content;ui.hud.hidden=state==='menu'||state==='select';}
@@ -120,17 +121,17 @@
   // The product does not handle production Identity credentials. Switching
   // accounts must happen on the IdP's same-origin, user-confirmed logout page.
   function signoutLink(){return productionHost?'<a class="secondary" href="https://id.shadowops.dpdns.org/logout?app=bridgesquad">Cerrar sesión / cambiar de cuenta</a>':'';}
-  function mainMenu(){state='menu';game=makeGame(selectedStage);ui.hud.hidden=true;showScreen(`<p class="eyebrow">SHADOWOPS PRESENTA · ARCADE TÁCTICO</p><h1>MATTHIAS<br><em>BRIDGE</em><br>SQUAD</h1><p>Un ejército de peones. Puertas que multiplican tropas. Refuerzos prisioneros. Cajas de armamento. Y un jefe de muy mala leche al final del puente.</p><div class="featurechips"><span class="chip">⚔ 12 NIVELES</span><span class="chip">♟ MATTHIAS AL MANDO</span><span class="chip">✦ 3 ESTRELLAS POR NIVEL</span><span class="chip">▣ PROGRESO GUARDADO</span></div>${btn('play',`DESPLEGAR ESCUADRÓN · NIVEL ${String(selectedStage).padStart(2,'0')}  →`)}${btn('levels','Elegir nivel','secondary')}${signoutLink()}<p class="tiny" style="margin:17px 0 0">Mueve el ratón, arrastra o usa <span class="key">A</span> / <span class="key">D</span>. La tropa dispara sola. Esquiva las marcas rojas de los tiradores; al jefe se le dispara desde el centro.</p><div class="footer">HECHO CON CARIÑO Y DISCIPLINA PRUSIANA</div>`);}
+  function mainMenu(){state='menu';game=makeGame(selectedStage);ui.hud.hidden=true;showScreen(`<p class="eyebrow">SHADOWOPS PRESENTA · ARCADE TÁCTICO</p><h1>MATTHIAS<br><em>BRIDGE</em><br>SQUAD</h1><p>Un ejército de peones. Puertas que multiplican tropas. Refuerzos prisioneros que interceptan una salva. Cajas de armamento. Y un jefe de muy mala leche al final del puente.</p><div class="featurechips"><span class="chip">⚔ 12 NIVELES</span><span class="chip">♟ MATTHIAS AL MANDO</span><span class="chip">✦ 3 ESTRELLAS POR NIVEL</span><span class="chip">▣ PROGRESO GUARDADO</span></div>${btn('play',`DESPLEGAR ESCUADRÓN · NIVEL ${String(selectedStage).padStart(2,'0')}  →`)}${btn('levels','Elegir nivel','secondary')}${signoutLink()}<p class="tiny" style="margin:17px 0 0">Mueve el ratón, arrastra o usa <span class="key">A</span> / <span class="key">D</span>. La tropa dispara sola. Esquiva las marcas rojas de los tiradores; al jefe se le dispara desde el centro.</p><div class="footer">HECHO CON CARIÑO Y DISCIPLINA PRUSIANA</div>`);}
   function levelsMenu(){state='select';game=makeGame(selectedStage);ui.hud.hidden=true;const cards=Array.from({length:12},(_,i)=>{const n=i+1,locked=n>progress.unlocked,stars=progress.stars[i];return `<button class="level ${n===selectedStage?'current':''}" data-action="pick" data-level="${n}" ${locked?'disabled':''}><strong>${locked?'🔒':String(n).padStart(2,'0')}</strong><span>${locked?'BLOQUEADO':stars?'★'.repeat(stars)+'☆'.repeat(3-stars):'SIN COMPLETAR'}</span></button>`}).join('');showScreen(`<p class="eyebrow">CAMPAÑA · MISIÓN EN CURSO</p><h2>Selecciona operación</h2><p>Supera cada jefe para desbloquear la siguiente misión. Las estrellas premian rescatar al héroe y conservar tropas.</p><div class="levels">${cards}</div><div class="stagename" id="selectedName">${selectedStage}. ${stageNames[selectedStage-1]}</div><div class="rule"></div>${btn('play','INICIAR OPERACIÓN →')}${btn('menu','← Volver al cuartel','secondary')}<div style="text-align:center;margin-top:20px"><button class="mutedlink" data-action="reset">Borrar progreso local</button></div>`);}
   function pauseMenu(){state='paused';showScreen(`<p class="eyebrow">ALTO EL FUEGO</p><h2>Operación en pausa</h2><p>Matthias te concede cinco segundos de descanso. No te acostumbres.</p>${btn('resume','REANUDAR OPERACIÓN →')}${btn('retry','Reiniciar nivel','secondary')}${btn('menu','Abandonar al cuartel','secondary')}${signoutLink()}`);}
   function endMenu(won){state=won?'won':'lost';const n=game.n;let stars=0,points=game.score+game.troops*12+Math.round((game.attack-1)*300)+game.kills*30;
     if(won){stars=1+Number(game.hero)+Number(game.troops>=Math.min(40,16+n*2));const better=Math.max(stars,progress.stars[n-1]);progress.stars[n-1]=better;progress.best[n-1]=Math.max(points,progress.best[n-1]);progress.wins++;progress.unlocked=Math.max(progress.unlocked,Math.min(12,n+1));save(PROGRESS_KEY,progress);}
-    showScreen(`<p class="eyebrow">${won?'MISIÓN CUMPLIDA · VICTORIA':'MISIÓN FALLIDA · REAGRUPAMIENTO'}</p><h2>${won?'El puente es nuestro.':'Hasta el último peón.'}</h2><div class="stars">${won?'★'.repeat(stars)+'☆'.repeat(3-stars):'☆☆☆'}</div><p>${won?(stars===3?'Matthias: Héroe rescatado, tropas en pie y puente tomado. Casi pareces competente.':game.hero?'Matthias: Has salvado al héroe. Ahora aprende a conservar a los demás.':'Matthias: El jefe cayó, pero abandonaste al prisionero. Qué gran generosidad.'): 'Matthias exige nuevos reclutas. El enemigo ha hecho salchichas con tu escuadrón.'}</p><div class="rows"><div class="metric"><b>${game.troops}</b><span>Supervivientes</span></div><div class="metric"><b>${game.attack.toFixed(2)}×</b><span>Ataque</span></div><div class="metric"><b>${won?points.toLocaleString('es-ES'):'—'}</b><span>Puntos</span></div></div><p class="tiny" style="text-align:center">${game.hero?'✓ Héroe liberado':'✗ Héroe no liberado'} · ${game.gates} puertas · ${game.kills} enemigos neutralizados</p>${won&&n<12?btn('next',`SIGUIENTE NIVEL ${String(n+1).padStart(2,'0')} →`):btn('retry',won?'REPETIR NIVEL →':'REINTENTAR →')}${won&&n<12?btn('retry','Rejugar este nivel','secondary'):''}${btn('levels','Elegir nivel','secondary')}`);
+    showScreen(`<p class="eyebrow">${won?'MISIÓN CUMPLIDA · VICTORIA':'MISIÓN FALLIDA · REAGRUPAMIENTO'}</p><h2>${won?'El puente es nuestro.':'Hasta el último peón.'}</h2><div class="stars">${won?'★'.repeat(stars)+'☆'.repeat(3-stars):'☆☆☆'}</div><p>${won?(stars===3?'Matthias: Héroe rescatado, tropas en pie y puente tomado. Casi pareces competente.':game.hero?'Matthias: Has salvado al héroe. Ahora aprende a conservar a los demás.':'Matthias: El jefe cayó, pero abandonaste al prisionero. Qué gran generosidad.'): 'Matthias exige nuevos reclutas. El enemigo ha hecho salchichas con tu escuadrón.'}</p><div class="rows"><div class="metric"><b>${game.troops}</b><span>Supervivientes</span></div><div class="metric"><b>${game.attack.toFixed(2)}×</b><span>Ataque</span></div><div class="metric"><b>${won?points.toLocaleString('es-ES'):'—'}</b><span>Puntos</span></div></div><p class="tiny" style="text-align:center">${game.hero?'✓ Héroe liberado':'✗ Héroe no liberado'} · ${game.gates} puertas · ${game.kills} enemigos neutralizados${game.hero?' · '+game.heroBlocks+' disparos interceptados':''}</p>${won&&n<12?btn('next',`SIGUIENTE NIVEL ${String(n+1).padStart(2,'0')} →`):btn('retry',won?'REPETIR NIVEL →':'REINTENTAR →')}${won&&n<12?btn('retry','Rejugar este nivel','secondary'):''}${btn('levels','Elegir nivel','secondary')}`);
   }
   ui.modal.addEventListener('click',e=>{const b=e.target.closest('button[data-action]');if(!b||b.disabled)return;const action=b.dataset.action; audio('tap');if(action==='menu')mainMenu();else if(action==='levels')levelsMenu();else if(action==='pick'){selectedStage=Number(b.dataset.level);levelsMenu();}else if(action==='play'||action==='retry'){start(selectedStage)}else if(action==='next'){selectedStage=Math.min(12,game.n+1);start(selectedStage)}else if(action==='resume'){state=game.bossPhase?'boss':'playing';hideScreen()}else if(action==='reset'){if(confirm('¿Borrar estrellas y niveles desbloqueados de este navegador?')){progress={unlocked:1,stars:Array(12).fill(0),best:Array(12).fill(0),wins:0};selectedStage=1;save(PROGRESS_KEY,progress);levelsMenu();}}});
   function start(n){selectedStage=n;game=makeGame(n);fx=[];floats=[];targetX=game.x;keys.clear();state='playing';hideScreen();ui.stage.textContent=String(n).padStart(2,'0');say(`<b>Matthias:</b> ${['¡En formación, zopencos!','Que nadie se quede atrás.','Mis peones valen más que vuestra dignidad.','El puente es mío. Solo falta tomarlo.'][n%4]}`,4);audio('start');canvas.focus({preventScroll:true});}
   function say(html,seconds=2.7){toastMessage=html;toastUntil=t+seconds;ui.toastText.innerHTML=html;ui.toast.hidden=false;}
-  function hudUpdate(){if(!game)return;ui.count.textContent=game.troops;ui.atk.textContent=game.attack.toFixed(1)+'×';const p=clamp(game.world/(game.length-14)*100,0,100);ui.prog.style.width=p.toFixed(1)+'%';ui.progress.setAttribute('aria-valuenow',Math.round(p));ui.toast.hidden=t>toastUntil;ui.mute.textContent=settings.muted?'♩':'♫';}
+  function hudUpdate(){if(!game)return;ui.count.textContent=game.troops;ui.atk.textContent=game.attack.toFixed(1)+'×';const p=clamp(game.world/(game.length-14)*100,0,100);ui.prog.style.width=p.toFixed(1)+'%';ui.progress.setAttribute('aria-valuenow',Math.round(p));ui.guard.hidden=!game.heroGuard;ui.toast.hidden=t>toastUntil;ui.mute.textContent=settings.muted?'♩':'♫';}
   function audio(what){if(settings.muted)return;try{audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==='suspended')audioCtx.resume();const now=audioCtx.currentTime,o=audioCtx.createOscillator(),g=audioCtx.createGain(),v={tap:[380,.045,.026],start:[490,.18,.07],gate:[680,.16,.055],hurt:[110,.24,.08],boost:[960,.21,.07],hit:[165,.07,.024],win:[740,.48,.08],lose:[125,.5,.09]}[what]||[370,.1,.03];o.type=(what==='hurt'||what==='lose')?'sawtooth':'sine';o.frequency.setValueAtTime(v[0],now);o.frequency.exponentialRampToValueAtTime(what==='lose'?60:Math.max(70,v[0]*.65),now+v[1]);g.gain.setValueAtTime(.0001,now);g.gain.exponentialRampToValueAtTime(v[2],now+.012);g.gain.exponentialRampToValueAtTime(.0001,now+v[1]);o.connect(g);g.connect(audioCtx.destination);o.start(now);o.stop(now+v[1]+.015);}catch{}}
   ui.mute.addEventListener('click',()=>{settings.muted=!settings.muted;save(SETTINGS_KEY,settings);hudUpdate();if(!settings.muted)audio('tap');});
   ui.pause.addEventListener('click',()=>{if(state==='playing'||state==='boss')pauseMenu()});
@@ -150,7 +151,17 @@
   addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));addEventListener('blur',()=>{keys.clear();if(state==='playing'||state==='boss')pauseMenu()});
   function burst(x,z,color,count=13){for(let i=0;i<count;i++){const a=Math.random()*Math.PI*2,v=20+Math.random()*100;fx.push({x,z,vx:Math.cos(a)*v,vy:-Math.random()*v-25,life:.45+Math.random()*.48,max:.9,color,size:2+Math.random()*5});}if(fx.length>180)fx.splice(0,fx.length-180);}
   function floatText(x,z,msg,color='#e9ffc4'){floats.push({x,z,txt:String(msg),color,life:1.35});if(floats.length>28)floats.shift();}
-  function casualty(n,why){const before=game.troops,lost=Math.min(before,Math.max(0,Math.ceil(n)));if(!lost)return;
+  function casualty(n,why,ranged=false){const before=game.troops,lost=Math.min(before,Math.max(0,Math.ceil(n)));if(!lost)return;
+    // The freed hero intercepts exactly ONE direct enemy volley.
+    // Environmental traps are still dangerous: positioning remains essential.
+    if(ranged&&game.heroGuard){
+      game.heroGuard=false;game.heroBlocks++;game.score+=60;
+      floatText(game.x,game.world+5,'🛡 BLOQUEADO','#eaffae');
+      burst(game.x,game.world+5,'#e4ffac',16);audio('boost');
+      say('<b>Matthias:</b> El héroe ha parado el disparo. ¡Por fin alguien útil!',3.1);
+      hudUpdate();
+      return;
+    }
     game.troops-=lost;screenShake=Math.min(11,screenShake+lost*.26);floatText(game.x,game.world+4,`−${lost}`, '#ff9d9e');audio('hurt');
     if(game.troops<=0){game.troops=0;endMenu(false);audio('lose');return;}
     // Matthias saves his insults for serious tactical errors, not every scratch.
@@ -176,7 +187,7 @@
             if(o.shotTimer>0){
               o.shotTimer=Math.max(0,o.shotTimer-dt);
               if(o.shotTimer===0){
-                if(Math.abs(game.x-o.aimX)<.88){casualty(Math.max(2,Math.ceil(o.strength*.48)),'¡Nos han fijado la posición! ¡Moveos!');if(state==='lost')return;}
+                if(Math.abs(game.x-o.aimX)<.88){casualty(Math.max(2,Math.ceil(o.strength*.48)),'¡Nos han fijado la posición! ¡Moveos!',true);if(state==='lost')return;}
                 else{game.score+=35;floatText(game.x,game.world+4,'ESQUIVADO','#b5ffb7');}
                 o.aimX=null;o.reload=2.1;
               }
@@ -188,7 +199,7 @@
           }
         }else if(o.type==='cage'){
           if(dz<27&&dz>1&&Math.abs(o.x-game.x)<1.9){o.hp-=dt*game.troops*game.attack*.95;game.shots+=dt*10;if(Math.random()<dt*10)burst(o.x,o.z,'#e7fdbc',2)}
-          if(o.hp<=0&&!o.liberated){o.used=true;o.liberated=true;game.hero=true;game.troops=Math.min(MAX_TROOPS,game.troops+o.reinforcements);game.attack=+(game.attack+.25).toFixed(2);game.peak=Math.max(game.peak,game.troops);game.score+=500;floatText(o.x,o.z,'¡HÉROE LIBRE! +'+o.reinforcements,'#eafa8a');burst(o.x,o.z,'#d5ff8e',27);say('<b>Matthias:</b> ¡Un héroe rescatado! Seguro que este sí sabe obedecer.',3.4);audio('boost');}
+          if(o.hp<=0&&!o.liberated){o.used=true;o.liberated=true;game.hero=true;game.heroGuard=true;game.troops=Math.min(MAX_TROOPS,game.troops+o.reinforcements);game.attack=+(game.attack+.25).toFixed(2);game.peak=Math.max(game.peak,game.troops);game.score+=500;floatText(o.x,o.z,'¡HÉROE LIBRE! +'+o.reinforcements,'#eafa8a');burst(o.x,o.z,'#d5ff8e',27);say('<b>Matthias:</b> ¡Héroe rescatado! Interceptará un disparo enemigo. Una sola vez, zopencos.',3.4);audio('boost');}
           else if(dz<.8&&!o.used){o.used=true;say('<b>Matthias:</b> Hemos dejado atrás al prisionero. Brillante.',2.7);}
         }
       }
@@ -201,7 +212,7 @@
       if(game.bossHp<=0){game.bossHp=0;game.score+=1500+game.n*180;endMenu(true);audio('win');burst(0,game.length,'#ffdd86',70);return}
       game.bossClock+=dt;
       if(game.bossPhase===1&&game.bossClock>=game.bossFire-1.0){game.bossPhase=2;game.bossAim=game.x;game.bossClock=0;}
-      else if(game.bossPhase===2&&game.bossClock>=1.0){game.bossPhase=3;game.bossClock=0;game.bossBlast=.5;if(Math.abs(game.x-game.bossAim)<1.25){casualty(3+Math.ceil(game.n*.55),'¡Esquivando bombas con los pies, incompetentes!');if(state==='lost')return;}else{game.score+=75;floatText(game.x,game.world+5,'ESQUIVADO','#b5ffb7');if(game.n>=3&&t>toastUntil)say('<b>Matthias:</b> ¡Bien esquivado! Quizá merezcas conservar tus extremidades.',3);}burst(game.bossAim,game.world+5,'#ff9c76',18)}
+      else if(game.bossPhase===2&&game.bossClock>=1.0){game.bossPhase=3;game.bossClock=0;game.bossBlast=.5;if(Math.abs(game.x-game.bossAim)<1.25){casualty(3+Math.ceil(game.n*.55),'¡Esquivando bombas con los pies, incompetentes!',true);if(state==='lost')return;}else{game.score+=75;floatText(game.x,game.world+5,'ESQUIVADO','#b5ffb7');if(game.n>=3&&t>toastUntil)say('<b>Matthias:</b> ¡Bien esquivado! Quizá merezcas conservar tus extremidades.',3);}burst(game.bossAim,game.world+5,'#ff9c76',18)}
       else if(game.bossPhase===3&&game.bossClock>=.47){game.bossPhase=1;game.bossClock=0;}
     }
     game.peak=Math.max(game.peak,game.troops);hudUpdate();
@@ -268,6 +279,14 @@
   function drawSquad(){if(!game)return;const count=Math.min(54,game.troops),cols=7;if(game.bossPhase===2){const aim=projected(game.bossAim,game.world+4),aw=Math.max(8,Math.min(W*.115,H*.145)*1.25);ctx.save();ctx.globalAlpha=.65+.2*Math.sin(t*20);poly([[aim.x-aw,aim.y+12],[aim.x+aw,aim.y+12],[aim.x+aw*.65,aim.y-120],[aim.x-aw*.65,aim.y-120]],'#ff53515a','#ff8988');textDraw('⚠ ARTILLERÍA',aim.x,aim.y-126,Math.max(9,Math.min(W/65,15)),'#ffdad3');ctx.restore();}else if(game.bossPhase===3&&game.bossBlast>0){const aim=projected(game.bossAim,game.world+4);ctx.beginPath();ctx.arc(aim.x,aim.y,70*(game.bossBlast/.5),0,Math.PI*2);ctx.fillStyle='#ffba6270';ctx.fill();}
     // Draw rear ranks first, leader last: keeps the hero readable.
     for(let i=count-1;i>=0;i--){const row=Math.floor(i/cols),col=i%cols,entries=Math.min(cols,count-row*cols),offset=col-(entries-1)/2,x=clamp(game.x+offset*.43,-3.5,3.5),z=game.world+3.8-row*.59;drawSoldier(x,z,i)}
+    if(game.hero){
+      // Visible escort keeps the rescue reward legible even after its shield expires.
+      const escortX=clamp(game.x-.86,-3.12,3.12),escortZ=game.world+5.0;
+      drawSoldier(escortX,escortZ,99);
+      const escort=projected(escortX,escortZ);
+      textDraw(game.heroGuard?'🛡':'★',escort.x,escort.y-45*escort.p,
+        Math.max(11,22*escort.p),game.heroGuard?'#e6ffab':'#ffda91');
+    }
     drawSoldier(game.x,game.world+5.5,-1,true);
     const p=projected(game.x,game.world+5.5),badgeY=p.y-85*p.p;if(game.troops>10){roundRect(p.x-25*p.p,badgeY-18*p.p,50*p.p,21*p.p,8*p.p,'#082a32dd');textDraw('×'+game.troops,p.x,badgeY-7*p.p,Math.max(9,17*p.p),'#eaffb6');}
     if(state==='boss'&&bossAimFactor(game.x)>.1){for(let k=0;k<Math.min(8,Math.ceil(game.troops/8));k++){const fireX=game.x+(Math.sin(t*12+k)*.8);const a=projected(fireX,game.world+6),b=projected((Math.random()-.5)*.8,game.world+19);if(Math.sin(t*21+k*2.2)>.48)line(a.x,a.y-20*a.p,b.x,b.y-65*b.p,'#ffdc81be',Math.max(1,2.5*a.p));}}
@@ -382,7 +401,7 @@
     mainMenu();requestAnimationFrame(frame);
   }
   // Small read-only test surface for deterministic browser smoke tests.
-  Object.defineProperty(window,'__MBS_TEST__',{value:Object.freeze({getState:()=>state,getIdentity:()=>({verified:!!identitySubject,expiresAt:identityExpiresAt}),getSnapshot:()=>game&&({level:game.n,world:game.world,x:game.x,troops:game.troops,attack:game.attack,bossHp:game.bossHp,hero:game.hero,score:game.score}),getProgress:()=>({...progress}),gateOutcome,bossAimFactor,levelData:n=>levelData(clamp(n,1,12))})});
+  Object.defineProperty(window,'__MBS_TEST__',{value:Object.freeze({getState:()=>state,getIdentity:()=>({verified:!!identitySubject,expiresAt:identityExpiresAt}),getSnapshot:()=>game&&({level:game.n,world:game.world,x:game.x,troops:game.troops,attack:game.attack,bossHp:game.bossHp,hero:game.hero,heroGuard:game.heroGuard,heroBlocks:game.heroBlocks,score:game.score}),getProgress:()=>({...progress}),gateOutcome,bossAimFactor,levelData:n=>levelData(clamp(n,1,12))})});
 })();
 </script>
 </body>
