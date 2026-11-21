@@ -73,6 +73,9 @@ TEST_HTML = HTML.replace(
       game.x=hazard.x;targetX=hazard.x;game.troops=25;
       game.hero=true;game.heroGuard=true;
       hudUpdate();
+      // Return fixture baseline atomically before requestAnimationFrame
+      // can run between separate Playwright evaluate calls.
+      return game.troops;
     };
     window.__testSetupBossWithEscort__ = () => {
       start(4);
@@ -211,8 +214,11 @@ with sync_playwright() as p:
         escort_page.evaluate('__testStep__(1.1,0)')
         second=escort_page.evaluate('__MBS_TEST__.getSnapshot()')
         assert second['troops'] < troops and second['heroBlocks']==1, second
-        escort_page.evaluate('__testSetupHazardWithEscort__()')
-        before=escort_page.evaluate('__MBS_TEST__.getSnapshot().troops')
+        # Capture the pre-impact fixture baseline inside the same JS turn:
+        # background requestAnimationFrame may already hit the hazard before
+        # a second Playwright evaluate() reads the snapshot.
+        before=escort_page.evaluate('__testSetupHazardWithEscort__()')
+        assert before==25, before
         escort_page.evaluate('__testStep__(.1)')
         hazard=escort_page.evaluate('__MBS_TEST__.getSnapshot()')
         assert hazard['troops'] < before and hazard['heroGuard'] and hazard['heroBlocks']==0, hazard
