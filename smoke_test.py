@@ -341,4 +341,41 @@ with sync_playwright() as p:
     profile.wait_for_function("window.__MBS_TEST__ && __MBS_TEST__.getState()==='auth-blocked'")
     print('OK production bootstrap, renewal, account isolation and revoked-session lock')
     profile.close()
+
+    # Staging host is pinned to id-staging only; never the production issuer.
+    staging='https://staging.bridgesquad.shadowops.dpdns.org'
+    stage_issuer='https://id-staging.shadowops.dpdns.org'
+    seen=[]
+    stage=browser.new_page()
+    stage.route(staging+'/', lambda route: route.fulfill(status=200,body=HTML,content_type='text/html'))
+    def stage_session(route):
+        if route.request.method=='POST':
+            assert route.request.headers.get('origin')==staging
+            route.fulfill(status=200,body=dumps({'identity':'bridgesquad','subject':subject_a,
+                 'expires_at':int(time())+118}),content_type='application/json')
+        else:
+            route.fulfill(status=200,body=dumps({'identity':'bridgesquad','subject':subject_a,
+                 'expires_at':int(time())+70}),content_type='application/json')
+    stage.route(staging+'/api/bridgesquad/session', stage_session)
+    stage_cors=dict(cors,**{'Access-Control-Allow-Origin':staging})
+    def stage_token(route):
+        seen.append(route.request.url)
+        route.fulfill(status=204 if route.request.method=='OPTIONS' else 200,headers=stage_cors,
+                      body='' if route.request.method=='OPTIONS' else '{"token":"synthetic-ephemeral-test-token"}',
+                      content_type='application/json')
+    stage.route(stage_issuer+'/api/identity/token', stage_token)
+    def forbidden(route):
+        seen.append('FORBIDDEN '+route.request.url)
+        route.abort()
+    stage.route('https://id.shadowops.dpdns.org/**', forbidden)
+    stage.goto(staging+'/')
+    stage.wait_for_function("window.__MBS_TEST__ && __MBS_TEST__.getState()==='menu'")
+    assert stage.locator('a[href="'+stage_issuer+'/logout?app=bridgesquad"]').count()==1, 'staging logout must use id-staging'
+    assert stage.locator('a[href="'+signout_url+'"]').count()==0, 'staging must never link production logout'
+    stage.evaluate("(s) => localStorage.setItem('shadowops.mbs.progress.v1:'+s,JSON.stringify({unlocked:7,stars:[2],wins:3}))",subject_a)
+    stage.reload()
+    stage.wait_for_function("window.__MBS_TEST__ && __MBS_TEST__.getProgress().unlocked===7")
+    assert not any(u.startswith('FORBIDDEN') for u in seen), seen
+    print('OK staging host pinned to id-staging: account save, logout link, no production issuer calls')
+    stage.close()
     browser.close()
