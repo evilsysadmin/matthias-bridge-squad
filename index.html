@@ -120,7 +120,7 @@
   const btn=(action,label,klass='cta')=>`<button class="${klass}" data-action="${action}">${label}</button>`;
   // The product does not handle production Identity credentials. Switching
   // accounts must happen on the IdP's same-origin, user-confirmed logout page.
-  function signoutLink(){return productionHost?'<a class="secondary" href="https://id.shadowops.dpdns.org/logout?app=bridgesquad">Cerrar sesión / cambiar de cuenta</a>':'';}
+  function signoutLink(){return productionHost?'<a class="secondary" href="'+identityIssuer+'/logout?app=bridgesquad">Cerrar sesión / cambiar de cuenta</a>':'';}
   function mainMenu(){state='menu';game=makeGame(selectedStage);ui.hud.hidden=true;showScreen(`<p class="eyebrow">SHADOWOPS PRESENTA · ARCADE TÁCTICO</p><h1>MATTHIAS<br><em>BRIDGE</em><br>SQUAD</h1><p>Un ejército de peones. Puertas que multiplican tropas. Refuerzos prisioneros que interceptan una salva. Cajas de armamento. Y un jefe de muy mala leche al final del puente.</p><div class="featurechips"><span class="chip">⚔ 12 NIVELES</span><span class="chip">♟ MATTHIAS AL MANDO</span><span class="chip">✦ 3 ESTRELLAS POR NIVEL</span><span class="chip">▣ PROGRESO GUARDADO</span></div>${btn('play',`DESPLEGAR ESCUADRÓN · NIVEL ${String(selectedStage).padStart(2,'0')}  →`)}${btn('levels','Elegir nivel','secondary')}${signoutLink()}<p class="tiny" style="margin:17px 0 0">Mueve el ratón, arrastra o usa <span class="key">A</span> / <span class="key">D</span>. La tropa dispara sola. Esquiva las marcas rojas de los tiradores; al jefe se le dispara desde el centro.</p><div class="footer">HECHO CON CARIÑO Y DISCIPLINA PRUSIANA</div>`);}
   function levelsMenu(){state='select';game=makeGame(selectedStage);ui.hud.hidden=true;const cards=Array.from({length:12},(_,i)=>{const n=i+1,locked=n>progress.unlocked,stars=progress.stars[i];return `<button class="level ${n===selectedStage?'current':''}" data-action="pick" data-level="${n}" ${locked?'disabled':''}><strong>${locked?'🔒':String(n).padStart(2,'0')}</strong><span>${locked?'BLOQUEADO':stars?'★'.repeat(stars)+'☆'.repeat(3-stars):'SIN COMPLETAR'}</span></button>`}).join('');showScreen(`<p class="eyebrow">CAMPAÑA · MISIÓN EN CURSO</p><h2>Selecciona operación</h2><p>Supera cada jefe para desbloquear la siguiente misión. Las estrellas premian rescatar al héroe y conservar tropas.</p><div class="levels">${cards}</div><div class="stagename" id="selectedName">${selectedStage}. ${stageNames[selectedStage-1]}</div><div class="rule"></div>${btn('play','INICIAR OPERACIÓN →')}${btn('menu','← Volver al cuartel','secondary')}<div style="text-align:center;margin-top:20px"><button class="mutedlink" data-action="reset">Borrar progreso local</button></div>`);}
   function pauseMenu(){state='paused';showScreen(`<p class="eyebrow">ALTO EL FUEGO</p><h2>Operación en pausa</h2><p>Matthias te concede cinco segundos de descanso. No te acostumbres.</p>${btn('resume','REANUDAR OPERACIÓN →')}${btn('retry','Reiniciar nivel','secondary')}${btn('menu','Abandonar al cuartel','secondary')}${signoutLink()}`);}
@@ -295,10 +295,16 @@
   function drawWorld(dt){if(!game)return;ctx.save();if(screenShake>.1){ctx.translate((Math.random()-.5)*screenShake,(Math.random()-.5)*screenShake);screenShake*=.89;}drawBackground();drawBridge();const objs=[...game.groups,...game.objects,{type:'boss',z:game.length}].sort((a,b)=>b.z-a.z);for(const o of objs){if(o.type==='gate')drawGate(o);else if(o.type==='hazard')drawHazard(o);else if(o.type==='crate')drawCrate(o);else if(o.type==='enemy')drawEnemy(o);else if(o.type==='cage')drawCage(o);else if(o.type==='boss')drawBoss()}
     drawSquad();drawFloatingAndFx(dt);ctx.restore();}
   function frame(ms){requestAnimationFrame(frame);const dt=Math.min((ms-last)/1000||0,.05);last=ms;t+=dt;update(dt);drawWorld(dt);} 
-  // Offline builds remain playable. Only the canonical HTTPS production host
-  // may request an edge-verified account and use a per-user campaign save.
+  // Offline builds remain playable. Only the two canonical HTTPS hosts may
+  // request an edge-verified account and use a per-user campaign save; each
+  // host is pinned to its own ShadowOps ID environment (never cross-env).
   // The Worker still enforces JWT signatures AND server-side freshness.
-  const productionHost=location.hostname==='bridgesquad.shadowops.dpdns.org';
+  const IDENTITY_BY_HOST=Object.freeze({
+    'bridgesquad.shadowops.dpdns.org':'https://id.shadowops.dpdns.org',
+    'staging.bridgesquad.shadowops.dpdns.org':'https://id-staging.shadowops.dpdns.org'
+  });
+  const identityIssuer=Object.hasOwn(IDENTITY_BY_HOST,location.hostname)?IDENTITY_BY_HOST[location.hostname]:null;
+  const productionHost=identityIssuer!==null;
   const subjectPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   let identitySubject=null,identityExpiresAt=0,renewTimer=null,renewInFlight=false;
   const nowSeconds=()=>Math.floor(Date.now()/1000);
@@ -334,7 +340,7 @@
     try{
       // No JWT is persisted or placed in the address bar. It exists only for
       // the HTTPS token exchange into a Secure HttpOnly first-party cookie.
-      const tokenResponse=await fetch('https://id.shadowops.dpdns.org/api/identity/token',{
+      const tokenResponse=await fetch(identityIssuer+'/api/identity/token',{
         method:'POST',credentials:'include',cache:'no-store',
         headers:{'Content-Type':'application/json'},body:'{}',
         signal:AbortSignal.timeout(8000)
